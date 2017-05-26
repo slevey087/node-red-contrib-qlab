@@ -1,0 +1,26 @@
+<script type="text/javascript">
+    RED.nodes.registerType('qlab',{
+        category: 'function',
+        color: '#5a5499',
+        defaults: {
+            name: {value:""}
+        },
+        inputs:1,
+        outputs:1,
+        icon: "",
+        label: function() {
+            return this.name||"qlab";
+        }
+    });
+</script>
+
+<script type="text/x-red" data-template-name="lower-case">
+    <div class="form-row">
+        <label for="node-input-name"><i class="icon-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name">
+    </div>
+</script>
+
+<script type="text/x-red" data-help-name="lower-case">
+    <p>Communicate with Qlab via OSC.</p>
+</script>
