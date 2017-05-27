@@ -35,4 +35,12 @@ module.exports = function(RED) {
     
     }
     RED.nodes.registerType("qlab query",QlabQuery);    
+
+    
+    function QlabConfig(config) {
+        RED.nodes.createNode(this,config);
+        var node = this;
+    
+    }
+    RED.nodes.registerType("qlab cofig",QlabConfig);    
 }
