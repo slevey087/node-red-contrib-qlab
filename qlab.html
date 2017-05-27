@@ -80,3 +80,28 @@
 <script type="text/x-red" data-help-name="qlab query">
     <p>Communicate with Qlab via OSC.</p>
 </script>
+
+
+<script type="text/javascript">
+    RED.nodes.registerType('qlab config',{
+        category: 'config',
+        color: '#5a5499',
+        defaults: {
+            name: {value:""}
+        },
+        label: function() {
+            return this.name||"qlab config";
+        }
+    });
+</script>
+
+<script type="text/x-red" data-template-name="qlab config">
+    <div class="form-row">
+        <label for="node-config-input-name"><i class="icon-tag"></i> Name</label>
+        <input type="text" id="node-config-input-name" placeholder="Name">
+    </div>
+</script>
+
+<script type="text/x-red" data-help-name="qlab config">
+    <p>Communicate with Qlab via OSC.</p>
+</script>
