@@ -3,15 +3,36 @@ module.exports = function(RED) {
     var osc = require('osc');
     var dgram = require('dgram');
     
-    function QlabNode(config) {
+    function QlabIn(config) {
+        RED.nodes.createNode(this,config);
+        var node = this;
+        
+
+    
+    }
+    RED.nodes.registerType("qlab in",QlabIn);
+
+    
+    function QlabOut(config) {
         RED.nodes.createNode(this,config);
         var node = this;
         
         node.on('input', function(msg) {
-            
-            
+              
         });
     
     }
-    RED.nodes.registerType("qlab",QlabNode111);
+    RED.nodes.registerType("qlab out",QlabOut);
+    
+    
+    function QlabQuery(config) {
+        RED.nodes.createNode(this,config);
+        var node = this;
+        
+        node.on('input', function(msg) {
+              
+        });
+    
+    }
+    RED.nodes.registerType("qlab query",QlabQuery);    
 }
