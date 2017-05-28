@@ -5,8 +5,10 @@ module.exports = function(RED) {
     
     function QlabIn(config) {
         RED.nodes.createNode(this,config);
+            
+        this.port = config.port;
+        this.passcode = config.passcode;
         var node = this;
-        
 
     
     }
@@ -15,6 +17,11 @@ module.exports = function(RED) {
     
     function QlabOut(config) {
         RED.nodes.createNode(this,config);
+        
+        this.ipAddress = config.ipAddress;
+        this.passcode = config.passcode;
+        this.sendPort = 53000;
+        this.listenPort = 53001;
         var node = this;
         
         node.on('input', function(msg) {
@@ -27,6 +34,11 @@ module.exports = function(RED) {
     
     function QlabQuery(config) {
         RED.nodes.createNode(this,config);
+        
+        this.ipAddress = config.ipAddress;
+        this.passcode = config.passcode;
+        this.sendPort = 53000;
+        this.listenPort = 53001;
         var node = this;
         
         node.on('input', function(msg) {
@@ -35,12 +47,5 @@ module.exports = function(RED) {
     
     }
     RED.nodes.registerType("qlab query",QlabQuery);    
-
     
-    function QlabConfig(config) {
-        RED.nodes.createNode(this,config);
-        var node = this;
-    
-    }
-    RED.nodes.registerType("qlab cofig",QlabConfig);    
 }
