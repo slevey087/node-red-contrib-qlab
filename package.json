@@ -1,7 +1,7 @@
 {
     "name"         : "node-red-contrib-qlab",
     "version"      : "0.0.1",
-    "description"  : "A Node-Red node to communicate with Qlab,
+    "description"  : "A Node-Red node to communicate with Qlab",
     "dependencies": {
                      "osc": "2.x" 
                     },
