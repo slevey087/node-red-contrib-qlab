@@ -20,10 +20,12 @@
 
 <script type="text/x-red" data-template-name="qlab in">
     <div class="form-row">
-        <label for="node-input-port"><i class="icon-tag"></i> Port to Listen On</label>
+        <label for="node-input-port"><i class="icon-tag"></i> Listen on port:</label>
         <input type="text" id="node-input-port" placeholder="port">
         <label for="node-input-passcode"><i class="icon-tag"></i> Passcode</label>
         <input type="text" id="node-input-passcode" placeholder="xxxx">
+    </div> 
+    <div class="form-row">    
         <label for="node-input-name"><i class="icon-tag"></i> Name</label>
         <input type="text" id="node-input-name" placeholder="Name">
     </div>
@@ -39,10 +41,8 @@
         category: 'output',
         color: '#5a5499',
         defaults: {
-            ipAddress: {value:"localhost",
-                        required:true,
-                        validate: function(v) {} },
-            passcode: {value:""},
+            qlab: {value:"",
+                  type:"qlab config"},
             name: {value:""}
         },
         inputs:1,
@@ -56,10 +56,10 @@
 
 <script type="text/x-red" data-template-name="qlab out">
     <div class="form-row">
-        <label for="node-input-ipAddress"><i class="icon-tag"></i> IP Address</label>
-        <input type="text" id="node-input-ipAddress" placeholder="x.x.x.x">
-        <label for="node-input-passcode"><i class="icon-tag"></i> Passcode</label>
-        <input type="text" id="node-input-code" placeholder="xxxx">
+        <label for="node-input-qlab"><i class="icon-tag"></i> Qlab</label>
+        <input type="text" id="node-input-qlab" placeholder="">
+    </div>
+    <div class="form-row">
         <label for="node-input-name"><i class="icon-tag"></i> Name</label>
         <input type="text" id="node-input-name" placeholder="Name">
     </div>
@@ -75,10 +75,8 @@
         category: 'function',
         color: '#5a5499',
         defaults: {
-            ipAddress: {value:"localhost",
-                        required:true,
-                        validate: function(v) {} },
-            passcode: {value:""},
+            qlab: {value:"",
+                  type:"qlab config"},            
             name: {value:""}
         },
         inputs:0,
@@ -92,10 +90,10 @@
 
 <script type="text/x-red" data-template-name="qlab query">
     <div class="form-row">
-        <label for="node-input-ipAddress"><i class="icon-tag"></i> IP Address</label>
-        <input type="text" id="node-input-ipAddress" placeholder="x.x.x.x or localhost">
-        <label for="node-input-passcode"><i class="icon-tag"></i> Passcode</label>
-        <input type="text" id="node-input-code" placeholder="xxxx">
+        <label for="node-input-qlab"><i class="icon-tag"></i> Qlab</label>
+        <input type="text" id="node-input-qlab" placeholder="">
+    </div>
+    <div class="form-row">
         <label for="node-input-name"><i class="icon-tag"></i> Name</label>
         <input type="text" id="node-input-name" placeholder="Name">
     </div>
@@ -104,3 +102,47 @@
 <script type="text/x-red" data-help-name="qlab query">
     <p>Communicate with Qlab via OSC.</p>
 </script>
+
+
+<script type="text/javascript">
+     RED.nodes.registerType('qlab config',{
+         category: 'config',
+         color: '#5a5499',
+         defaults: {
+            ipAddress: {value:"localhost",
+                        required:true,
+                        validate: function(v) {} },
+            protocol: {value:"udp",
+                      required:true},                    
+            passcode: {value:""},             
+            name: {value:""}
+         },
+         label: function() {
+             return this.name||"qlab config";
+         }
+     });
+ </script>
+ 
+ <script type="text/x-red" data-template-name="qlab config">
+     <div class="form-row">
+        <label for="node-config-input-ipAddress"><i class="icon-tag"></i> IP Address</label>
+        <input type="text" id="node-config-input-ipAddress" placeholder="x.x.x.x or localhost">
+     </div>
+     <div class="form-row">
+        <label for="node-config-input-protocol"><i class="icon-tag"></i> Protocol</label>
+        <select id="node-config-input-protocol">
+            <option value="udp">UDP</option>
+            <option value="tcp">TCP</option>
+        </select>
+        <label for="node-config-input-passcode"><i class="icon-tag"></i> Passcode</label>
+        <input type="text" id="node-config-input-passcode" placeholder="xxxx">
+     </div>
+     <div class="form-row">
+        <label for="node-config-input-name"><i class="icon-tag"></i> Name</label>
+        <input type="text" id="node-config-input-name" placeholder="Name">
+     </div>
+ </script>
+ 
+ <script type="text/x-red" data-help-name="qlab config">
+     <p>Communicate with Qlab via OSC.</p>
+ </script>
