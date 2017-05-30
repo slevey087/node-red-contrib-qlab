@@ -120,7 +120,12 @@ module.exports = function(RED) {
         });
         
         // Open the socket.
-        udpPort.open();            
+        try {
+            udpPort.open();            
+        }
+        catch (error) {
+            node.error(error.message);
+        }
     }
     RED.nodes.registerType("qlab in",QlabIn);
 
