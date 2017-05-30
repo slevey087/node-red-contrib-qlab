@@ -40,14 +40,17 @@ module.exports = function(RED) {
         };
       
         
-        
         // Create an osc.js UDP Port listening on port 57121.
-        var udpPort = new osc.UDPPort({
-            localAddress: "0.0.0.0",
-            localPort: node.port,
-            metadata: false
-        });
-            
+        try {        
+            var udpPort = new osc.UDPPort({
+                localAddress: "0.0.0.0",
+                localPort: node.port,
+                metadata: false
+            });
+        }
+        catch (error) {
+            node.error(error.message, []);
+        }
                                       
        // Listen for incoming OSC bundles.
         udpPort.on("bundle", function (oscBundle, timeTag, info) {
