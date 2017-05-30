@@ -21,7 +21,7 @@ module.exports = function(RED) {
         
         node.connectTo = function(ipAddress) {
             node.connectedTo.push(ipAddress);
-            setTimeout(function() {node.disconnectFrom(ipAddress)}, 31000);
+            setTimeout(function() { node.disconnectFrom(ipAddress); }, 31000);
             return true;
         };
         
@@ -37,7 +37,7 @@ module.exports = function(RED) {
             var index = node.connectedTo.indexOf(ipAddress);
             if (index > -1) { return true; }
             else { return false; }
-        }
+        };
       
         
         
