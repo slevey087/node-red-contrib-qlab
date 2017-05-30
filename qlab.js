@@ -46,7 +46,7 @@ module.exports = function(RED) {
             localAddress: "0.0.0.0",
             localPort: node.port,
             metadata: false
-        };
+        });
             
                                       
        // Listen for incoming OSC bundles.
