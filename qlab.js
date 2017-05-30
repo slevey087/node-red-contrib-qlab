@@ -39,6 +39,10 @@ module.exports = function(RED) {
             else { return false; }
         };
       
+        //tidy up
+        node.on('close', function() {
+           udpPort.close(); 
+        });
         
         // Create an osc.js UDP Port listening on port 57121.
         try {        
