@@ -182,7 +182,7 @@ module.exports = function(RED) {
         var node = this;
      
     }
-    RED.nodes.registerType("qlab cofig",QlabConfig);       
+    RED.nodes.registerType("qlab config",QlabConfig);       
     
 }
 
