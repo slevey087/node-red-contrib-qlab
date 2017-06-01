@@ -3,10 +3,11 @@
         category: 'input',
         color: '#5a5499',
         defaults: {
-            port: {value:53001,
+            port: {value:53002,
                    required:true,
-                   validate: function(v) {}},
-            passcode: {value:""},
+                   validate: function(v) {return (Number(v) > 0) && (Number(v) < 65536);} },
+            passcode: {value:"",
+                       validate: function(v) { return (v.match(/^\d\d\d\d$/) || v === ""); } },
             name: {value:""}
         },
         inputs:0,
@@ -17,25 +18,22 @@
         }
     });
 </script>
-
 <script type="text/x-red" data-template-name="qlab in">
     <div class="form-row">
-        <label for="node-input-port"><i class="icon-tag"></i> Listen on port:</label>
-        <input type="text" id="node-input-port" placeholder="port">
-        <label for="node-input-passcode"><i class="icon-tag"></i> Passcode</label>
-        <input type="text" id="node-input-passcode" placeholder="xxxx">
+        <label for="node-input-port"><i class="fa fa-dot-circle-o"></i> Listen port:</label>
+        <input type="text" id="node-input-port" style="width:80px;" placeholder="port">
+		&nbsp; &nbsp; &nbsp; 
+        <label for="node-input-passcode"><i class="fa fa-lock"></i> Passcode</label>
+        <input type="text" id="node-input-passcode" style="width:80px;" placeholder="xxxx">
     </div> 
     <div class="form-row">    
         <label for="node-input-name"><i class="icon-tag"></i> Name</label>
         <input type="text" id="node-input-name" placeholder="Name">
     </div>
 </script>
-
 <script type="text/x-red" data-help-name="qlab in">
     <p>Communicate with Qlab via OSC.</p>
 </script>
-
-
 <script type="text/javascript">
     RED.nodes.registerType('qlab out',{
         category: 'output',
@@ -53,7 +51,6 @@
         }
     });
 </script>
-
 <script type="text/x-red" data-template-name="qlab out">
     <div class="form-row">
         <label for="node-input-qlab"><i class="icon-tag"></i> Qlab</label>
@@ -64,12 +61,9 @@
         <input type="text" id="node-input-name" placeholder="Name">
     </div>
 </script>
-
 <script type="text/x-red" data-help-name="qlab out">
     <p>Communicate with Qlab via OSC.</p>
 </script>
-
-
 <script type="text/javascript">
     RED.nodes.registerType('qlab query',{
         category: 'function',
@@ -87,7 +81,6 @@
         }
     });
 </script>
-
 <script type="text/x-red" data-template-name="qlab query">
     <div class="form-row">
         <label for="node-input-qlab"><i class="icon-tag"></i> Qlab</label>
@@ -98,12 +91,9 @@
         <input type="text" id="node-input-name" placeholder="Name">
     </div>
 </script>
-
 <script type="text/x-red" data-help-name="qlab query">
     <p>Communicate with Qlab via OSC.</p>
 </script>
-
-
 <script type="text/javascript">
      RED.nodes.registerType('qlab config',{
          category: 'config',
