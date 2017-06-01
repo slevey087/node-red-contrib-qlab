@@ -101,10 +101,12 @@
          defaults: {
             ipAddress: {value:"localhost",
                         required:true,
-                        validate: function(v) {} },
+                        validate: function(v) { return (v.match(/^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/)
+						       || v == "localhost"); } },
             protocol: {value:"udp",
                       required:true},                    
-            passcode: {value:""},             
+            passcode: {value:"",
+		       validate: function(v) { return (v.match(/^\d\d\d\d$/) || v === ""); }},             
             name: {value:""}
          },
          label: function() {
