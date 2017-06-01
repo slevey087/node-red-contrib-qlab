@@ -76,17 +76,28 @@ module.exports = function(RED) {
                     
                 }
                 
+                //Variable to indicate whether message has permission
+                var connected;
                 
                 for (var i = 0;  i < loopLength; i++) {
+                    //If message is connect request, add sender info to list
                     if (packet.packets[i].address == "/connect" && packet.packets[i].args == node.passcode)
                     { 
                         node.connectTo(info.address); 
                     }
                     
+                    //If message is connect request but wrong password, then don't allow subsequent messages
+                    else if (packet.packets[i].address == "/connect" && packet.packets[i].args !== node.passcode)
+                    {
+                        connected = false;
+                        
+                        //If this was previously allowed user, dis-allow them
+                        if (node.checkConnection(info.address)) { node.disconnectFrom(info.address); }
+                    }
                     else {
                         //assume not connected unless connection is recorded or
                         //not requiring passcode
-                        var connected = false;
+                        connected = false;
                         
                         if (node.requirePasscode)
                         {
@@ -104,7 +115,14 @@ module.exports = function(RED) {
                 //Don't send array if there's only one send-able message
                 if (payload.length == 1) { payload = payload[0]; }
                 
-                node.send({payload:payload, packetInfo:info});
+                //If proper passcodes, send message. If not, send rejection notice with
+                //packet info.
+                if (connected) {
+                    node.send({payload:payload, packetInfo:info});
+                }
+                else {
+                    node.send({payload:{rejected:true}, packetInfo:info});
+                }
             }
             catch (error) {
                 node.error(error.message);
@@ -167,3 +185,4 @@ module.exports = function(RED) {
     RED.nodes.registerType("qlab cofig",QlabConfig);       
     
 }
+
