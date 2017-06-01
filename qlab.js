@@ -95,7 +95,7 @@ module.exports = function(RED) {
                         else { connected = true; }
                         
                         if (node.connected) {
-                            payload.push({address:packet.packets[i].address, arguments:packets[i].args});
+                            payload.push({address:packet.packets[i].address, arguments:packet.packets[i].args});
                         }
                         else { node.error("Receiving commands without proper passcode/connection.", {}); }
                     }
