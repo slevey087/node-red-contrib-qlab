@@ -38,97 +38,87 @@ module.exports = function(RED) {
             if (index > -1) { return true; }
             else { return false; }
         };
-      
-        //tidy up
+        
+        //create udp socket
+        node.socket = dgram.createSocket({type:'udp4', reuseAddr:true});
+        
+        //tidy up when flow stops
         node.on('close', function() {
-           udpPort.close(); 
+           node.socket.close(); 
+           node.connectedTo = [];
         });
         
-        // Create an osc.js UDP Port listening on port 57121.
-        try {        
-            var udpPort = new osc.UDPPort({
-                localAddress: "0.0.0.0",
-                localPort: node.port,
-                metadata: false
-            });
-        }
-        catch (error) {
-            node.error(error.message, []);
-        }
-                                      
-       // Listen for incoming OSC bundles.
-        udpPort.on("bundle", function (oscBundle, timeTag, info) {
-            
-            var packets = oscBundle.packets.slice();                      
-            var payload = [];
-            
-            for (var i = 0, len = packets.length; i < len; i++) {
-                if (packets[i].address == "/connect" && packets[i].args == node.passcode)
-                { 
-                    node.connectTo(info.address); 
-                }
-                
-                else {
-                    var connected = false;
-                    
-                    if (node.requirePasscode)
-                    {
-                        if (node.checkConnection(info.address)) { connected = true; }
-                    }
-                    else { connected = true; }
-                    
-                    if (node.connected) {
-                        payload.push({address:packets[i].address,arguments:packets[i].args});
-                    }
-                    else { node.error("Receiving commands without proper passcode/connection.", {}); }
-                }
-            }
-            
-            //Don't send array if there's only one send-able message
-            if (payload.length == 1) { payload = payload[0]; }
-            
-            node.send({payload:payload, packetInfo:info});
-            
-        }); 
         
-
         // Listen for incoming OSC single-messages.
-        udpPort.on("message", function (oscMessage, timeTag, info) {
+        node.socket.on("message", function (message, info) {
             
-            var packet = oscMessage;                      
-            var payload = {};            
+            //in case of error
+            try {
+                //translate incoming packet
+                var packet = osc.readPacket(message, {metadata:false, unpackSingleArgs:false});
             
-            if (packet.address == "/connect" && packet.args == node.passcode)
-            { 
-                node.connectTo(info.address); 
-            }
+                var payload = {};  
                 
-            else {
-                var connected = false;
+                //Assume single message
+                var loopLength = 1;
+                
+                //if packet has 'packets' property, then it's a bundle, otherwise
+                //it's a single message. See 'osc' documentation.
+                if (packet.hasOwnProperty('packets')) {
+                    loopLength = packet.packets.length;
+                }
+                else {
+                    //put single message into array
+                    var temp = [];
+                    temp.push(JSON.parse(JSON.stringify(packet)));
+                    packet = {};
+                    packet.packets = temp.slice();
                     
-                if (node.requirePasscode)
-                {
-                    if (node.checkConnection(info.address)) { connected = true; }
                 }
-                //Always connected if passcode not required
-                else { connected = true; }
                 
-                if (node.connected) {
-                    payload = {address:packet.address,arguments:packet.args};
+                
+                for (var i = 0;  i < loopLength; i++) {
+                    if (packet.packets[i].address == "/connect" && packet.packets[i].args == node.passcode)
+                    { 
+                        node.connectTo(info.address); 
+                    }
+                    
+                    else {
+                        //assume not connected unless connection is recorded or
+                        //not requiring passcode
+                        var connected = false;
+                        
+                        if (node.requirePasscode)
+                        {
+                            if (node.checkConnection(info.address)) { connected = true; }
+                        }
+                        else { connected = true; }
+                        
+                        if (node.connected) {
+                            payload.push({address:packet.packets[i].address, arguments:packets[i].args});
+                        }
+                        else { node.error("Receiving commands without proper passcode/connection.", {}); }
+                    }
                 }
-                else { node.error("Receiving commands without proper passcode/connection.", {}); }
+                
+                //Don't send array if there's only one send-able message
+                if (payload.length == 1) { payload = payload[0]; }
+                
+                node.send({payload:payload, packetInfo:info});
             }
-            
-            node.send({payload:payload, packetInfo:info});
+            catch (error) {
+                node.error(error.message);
+            }            
         });         
         
-        udpPort.on("error", function (error) {
+        node.socket.on("error", function (error) {
             node.error(error.message, []);
         });
         
         // Open the socket.
         try {
-            udpPort.open();            
+            var options = {port:node.port, exclusive:false};
+            node.socket.bind(options);
         }
         catch (error) {
             node.error(error.message);
