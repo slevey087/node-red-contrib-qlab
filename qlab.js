@@ -57,7 +57,7 @@ module.exports = function(RED) {
                 //translate incoming packet
                 var packet = osc.readPacket(message, {metadata:false, unpackSingleArgs:false});
             
-                var payload = {};  
+                var payload = [];  
                 
                 //Assume single message
                 var loopLength = 1;
