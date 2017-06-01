@@ -2,6 +2,7 @@ module.exports = function(RED) {
     "use strict";
     var osc = require('osc');
     var dgram = require('dgram');
+    var net = require('net');
     
     function QlabIn(config) {
         RED.nodes.createNode(this,config);
