@@ -7,7 +7,7 @@
                    required:true,
                    validate: function(v) {return (Number(v) > 0) && (Number(v) < 65536);} },
             passcode: {value:"",
-                       validate: function(v) { return (v.match(/^dddd$/) || v == ""; } },
+                       validate: function(v) { return (v.match(/^dddd$/) || v === ""); } },
             name: {value:""}
         },
         inputs:0,
