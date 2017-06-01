@@ -5,7 +5,7 @@
         defaults: {
             port: {value:53001,
                    required:true,
-                   validate: function(v) {}},
+                   validate: RED.validators.regex(/^dddd$/)},
             passcode: {value:""},
             name: {value:""}
         },
