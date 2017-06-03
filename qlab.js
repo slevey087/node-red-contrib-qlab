@@ -3,6 +3,7 @@ module.exports = function(RED) {
     var osc   = require('osc');
     var dgram = require('dgram');
     var net   = require('net');
+    var slip  = require('slip');
     
     function QlabIn(config) {
         RED.nodes.createNode(this,config);
@@ -199,9 +200,7 @@ module.exports = function(RED) {
         
         node.on('input', function(msg) {
 			try {
-				node.qlab.createSocket().send(msg.payload, function(){
-					node.log("callback reached");
-				});
+				node.qlab.createSocket().send(msg.payload, true, node);
 			}
 			catch (error) {
 				node.error(error.message);
@@ -246,7 +245,7 @@ module.exports = function(RED) {
 					//create UDP socket
 					node.socket = dgram.createSocket({type:'udp4', reuseAddr:true});
 					
-										node.socket.on("connect", function() {
+					node.socket.on("connect", function() {
 						
 					});					
 					
@@ -262,23 +261,21 @@ module.exports = function(RED) {
 			return node;
 		};
 		
-		
-		this.send = function(message, waitForReply, callback) {
-			var onReply = callback;
+		//Pass along the node calling this function if a reply is desired.
+	    	//This function will emit "socketReply" on that node if reply is 
+	    	//received.
+		this.send = function(message, waitForReply, callingNode) {
 			var toSend = message;
+			var caller = callingNode;
 			
-			
-			if (!callback) {
-				onReply = function
-			}
+			if (waitForReply) { node.numListening++; }			
+
 			
 			if (node.socket) {
-				
-				
+								
 				if (node.protocol == "tcp") {
 					
-					if (waitForReply) { 
-						node.numListening++; 
+					if (waitForReply) {  
 						node.socket.once("data", function() { node.numListening--; } )
 					}	
 					
@@ -286,13 +283,38 @@ module.exports = function(RED) {
 						node.socket.connect(node.sendPort, node.ipAddress, function(){
 							node.listening = true;
 							
-							node.socket.once("data")							
+							node.socket.once("data", function(data) {
+								caller.emit("socketReply", data);
+								
+								if (node.numListening === 0) {
+									node.socket.destroy();
+									node.listening = false;
+								}
+							});							
 							node.socket.write(message);
 						});
 					}
-					else { node.socket.write(message); }
+					else { 
+						node.socket.once("data", function(data) {
+							if (node.numListening === 0) {
+								node.socket.destroy();
+								node.listening = false;
+							}
+						
+							caller.emit("socketReply", data);
+                        });	
+                        
+						node.socket.write(message); 
+						
+					}
 				}
 			}
+		};
+		
+		this.closeSocket = function() {
+		    node.listening = false;
+		    node.numListening = 0;
+		    node.socket = undefined;
 		};
 	 
 	 
@@ -302,4 +324,3 @@ module.exports = function(RED) {
     RED.nodes.registerType("qlab config",QlabConfig);       
     
 };
-
