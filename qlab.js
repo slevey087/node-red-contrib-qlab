@@ -214,10 +214,14 @@ module.exports = function(RED) {
 			
             try 
 			{				
-				packet = new Buffer(osc.writePacket(packet));
-				var qlabMessage = new QlabMessage(packet, true);
+				//packet = new Buffer(osc.writePacket(packet));
+				var qlabMessage = new QlabMessage(packet, true).toOSC().toSlip().toBuffer();
 				qlabMessage.on('noReply', function(){
 					node.log("No reply, closing socket");
+				});
+				
+				qlabMessage.on('reply', function(){
+					node.send({payload:qlabMessage.data});
 				});
 				
 				node.qlab.createSocket().send(qlabMessage);
@@ -282,11 +286,10 @@ module.exports = function(RED) {
 			return node;
 		};
 		
-		//Pass along the node calling this function if a reply is desired.
-	    	//This function will emit "socketReply" on that node if reply is 
-	    	//received.
+		
 		this.send = function(qlabMessage) {			
 			
+			//numListening tracks how many messages are waiting for replies
 			if (qlabMessage.needsReply) { node.numListening++; }			
             
             
@@ -296,25 +299,33 @@ module.exports = function(RED) {
 			
 			if (node.protocol == "tcp") {	
 				
+				//If port is not already open, then open it.
+				//Once it's open, attach event listeners and
+				//Send message.
 				if (!node.listening) {
 					node.socket.connect(node.sendPort, node.ipAddress, function(){
 						node.listening = true;
 						node.log("Listening on socket. numListening = " + node.numListening);
 						
+						//If a reply is received, verify that it's for the sending message
+						//If so, pass along data. If not, keep listening
 						node.socket.once("data", function(data) {
 							if (qlabMessage.verifyReply()) { 
 								node.numListening--; 
-								qlabMessage.emit("reply", data);
+								qlabMessage.emit("replyRaw", data);
 							}								
 							
 							console.log(node.numListening);
-							
+							//If nobody is listening, destroy socket.
 							if (node.numListening === 0) {
 								node.socket.destroy();
 								node.listening = false;
 								node.log("Socket destroyed");
 							}							
-						});							
+						});	
+						
+						//Send message, and close port when finished, unless this or another
+						//message is still waiting for a reply.
 						node.socket.write(qlabMessage.data, function() {
 							if (node.numListening === 0) {
 								node.socket.destroy();
@@ -330,7 +341,7 @@ module.exports = function(RED) {
 					node.socket.once("data", function(data) {
 						if (qlabMessage.verifyReply()) { 
 							node.numListening--; 
-							qlabMessage.emit("reply", data);
+							qlabMessage.emit("replyRaw", data);
 						}	
 						
 						
@@ -340,7 +351,7 @@ module.exports = function(RED) {
 							node.log("Socket destroyed");
 						}
 					
-						qlabMessage.emit("reply", data);
+						qlabMessage.emit("replyRaw", data);
 						qlabMessage.checkReply;
                     });	
                     
@@ -379,7 +390,7 @@ module.exports = function(RED) {
 							node.socket.once("message", function(data) {
 								if (qlabMessage.verifyReply()) { 
 									node.numListening--; 
-									qlabMessage.emit("reply", data);
+									qlabMessage.emit("replyRaw", data);
 								}								
 								
 								if (node.numListening === 0) {
@@ -394,7 +405,7 @@ module.exports = function(RED) {
 						node.socket.once("message", function(data) {
 							if (qlabMessage.verifyReply()) { 
 								node.numListening--; 
-								qlabMessage.emit("reply", data);
+								qlabMessage.emit("replyRaw", data);
 							}							
 						
 						
@@ -460,15 +471,53 @@ module.exports = function(RED) {
 		var qlabMessage = this;
 						
 		this.toSlip = function() {
-			return this;
+			qlabMessage.data = slip.encode(qlabMessage.data);
+			return qlabMessage;
 		};
 		
-		this.toOsc = function() {
-			return this;
+		this.toOSC = function() {
+			try {
+				qlabMessage.data = osc.writePacket(qlabMessage.data);
+			}
+			catch (error) {
+				qlabMessage.emit("error", new Error(error.message));
+			}
+			return qlabMessage;
 		};
 		
 		this.toBuffer = function() {
-			return this;
+			qlabMessage.data = new Buffer(qlabMessage.data);
+			return qlabMessage;
+		};
+		
+		this.fromOSCBuffer = function() {
+			try {
+				qlabMessage.data = osc.readPacket(qlabMessage.data, {metadata:false, unpackSingleArgs:false});
+			}
+			catch (error) {
+				qlabMessage.emit("error", new Error(error.message));
+			}
+			return qlabMessage;
+		};
+		
+		this.fromSlip = function(callback) {
+			
+			function emitError(message, errorMessage) {
+				qlabMessage.emit("error", new Error(errorMessage));
+			}
+			
+			var decoder = new slip.Decoder({
+				onMessage: function(message) {
+								qlabMessage.data = message;
+								console.log("made it to the slip callback");
+								callback();
+								},
+				onError  : emitError
+			});
+
+			decoder.decode(qlabMessage.data);
+			
+			return qlabMessage;
 		};
 		
 		this.getData = function() {
@@ -487,7 +536,11 @@ module.exports = function(RED) {
 				{ return false; }
 		};
 		
-		qlabMessage.on("reply", function() { qlabMessage.needsReply = false; console.log("Reply received");});
+		qlabMessage.on("replyRaw", function() { 
+			qlabMessage.needsReply = false; 
+			qlabMessage.fromSlip(function() {qlabMessage.fromOSCBuffer().emit("reply");} );
+			console.log("Reply received");
+		});
 		
 	}
 	util.inherits(QlabMessage, EventEmitter);
