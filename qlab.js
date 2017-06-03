@@ -1,15 +1,16 @@
 module.exports = function(RED) {
     "use strict";
-    var osc = require('osc');
+    var osc   = require('osc');
     var dgram = require('dgram');
-    var net = require('net');
+    var net   = require('net');
     
     function QlabIn(config) {
         RED.nodes.createNode(this,config);
             
-        this.port = config.port;
+        this.port 	  = config.port;
         this.passcode = config.passcode;
-        var node = this;
+        
+		var node = this;
   
         //require passcode if one is given by user        
         if (node.passcode !== "")   
@@ -149,10 +150,35 @@ module.exports = function(RED) {
     function QlabOut(config) {
         RED.nodes.createNode(this,config);
         
+		// Retrieve the config node
+        this.qlab 		 = RED.nodes.getNode(config.qlab);
+		this.passcode 	 = config.passcode;
+		this.workspaceId = config.workspaceId;
+		
         var node = this;
         
+		node.qlab.createSocket();
+		
+		//put event handlers here
+		
         node.on('input', function(msg) {
-              
+			var packet;
+			
+			if (msg.topic) {
+				packet = {address:msg.topic, args:msg.payload}; 
+			}
+			
+            try {
+				packet = new Buffer(osc.writePacket(packet));
+				node.qlab.createSocket().send(packet, function(){
+					node.log("callback reached");
+				});
+			}
+			catch (error) {
+				node.error(error.message);
+			}
+			
+			
         });
     
     }
@@ -162,10 +188,24 @@ module.exports = function(RED) {
     function QlabQuery(config) {
         RED.nodes.createNode(this,config);
         
+		// Retrieve the config node
+        this.qlab 		 = RED.nodes.getNode(config.qlab);
+		this.passcode 	 = config.passcode;
+		this.workspaceId = config.workspaceId;
+		
         var node = this;
+		
+		
         
         node.on('input', function(msg) {
-              
+			try {
+				node.qlab.createSocket().send(msg.payload, function(){
+					node.log("callback reached");
+				});
+			}
+			catch (error) {
+				node.error(error.message);
+			}
         });
     
     }
@@ -175,15 +215,99 @@ module.exports = function(RED) {
     function QlabConfig(config) {
          RED.nodes.createNode(this,config);
          
-        this.ipAddress = config.ipAddress;
-        this.passcode = config.passcode;
-        this.sendPort = 53000;
-        this.listenPort = 53001;
+        this.ipAddress 	= config.ipAddress;
+        this.protocol 	= config.protocol;
+				
+        this.sendPort	= 53000;
+        this.listenPort = 53001;	//for UDP only
         
         var node = this;
      
+	 
+		this.createSocket = function() {
+			
+			//if socket does not already exist
+			if (!node.socket) {
+				
+				if (node.protocol == 'tcp') {
+					
+					//create TCP socket
+					node.socket = new net.Socket();
+					
+					node.socket.on("connect", function() {
+						node.emit("socketOpen");
+					});
+					
+					node.socket.on("data", function(data) {
+						info = {address:node.ipAddress};
+						node.emit("socketMessage", data, info);
+					});
+					
+					node.socket.on("close", function(had_error) {
+						node.emit("socketClose");
+					});
+					
+					node.socket.on("error", function(error) {
+						node.emit("error", error);
+					});									
+				}
+				
+				else if (node.protocol == "udp") {
+					
+					//create UDP socket
+					node.socket = dgram.createSocket({type:'udp4', reuseAddr:true});
+					
+										node.socket.on("connect", function() {
+						
+					});
+					
+					node.socket.on("listening", function() {
+						node.emit("socketOpen");
+					});
+					
+					node.socket.on("message", function(message, info) {
+						node.emit("socketMessage", message, info);
+					});
+					
+					node.socket.on("close", function() {
+						node.emit("socketClose");
+					});
+					
+					node.socket.on("error", function(error) {
+						node.emit("error", error);
+					});										
+				}
+				
+				
+			
+			}
+			
+			return node;
+		};
+		
+		
+		this.send = function(message, callback) {
+			var onSend = callback;
+			var toSend = message;
+			
+			if (node.socket) {
+				
+				if (node.protocol == "tcp") {
+					if (!node.listening) {
+						node.socket.connect(node.sendPort, node.ipAddress, function(){
+							node.listening = true;
+							node.socket.write(message,null,onSend);
+						});
+					}
+					else { node.socket.write(message,null,onSend); }
+				}
+			}
+		};
+	 
+	 
+
+	 
     }
     RED.nodes.registerType("qlab config",QlabConfig);       
     
-}
-
+};
