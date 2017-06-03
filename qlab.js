@@ -174,11 +174,7 @@ module.exports = function(RED) {
 			
             try 
 			{				
-				packet = new Buffer(osc.writePacket(packet));
 				var qlabMessage = new QlabMessage(packet, false);
-				qlabMessage.on('noReply', function(){
-					node.log("No reply, closing socket");
-				});
 				
 				node.qlab.createSocket().send(qlabMessage);
 			}
@@ -214,8 +210,7 @@ module.exports = function(RED) {
 			
             try 
 			{				
-				//packet = new Buffer(osc.writePacket(packet));
-				var qlabMessage = new QlabMessage(packet, true).toOSC().toSlip().toBuffer();
+				var qlabMessage = new QlabMessage(packet, true);
 				qlabMessage.on('noReply', function(){
 					node.log("No reply, closing socket");
 				});
@@ -299,6 +294,17 @@ module.exports = function(RED) {
 			
 			if (node.protocol == "tcp") {	
 				
+				qlabMessage.toOSC().toSlip().toBuffer();
+				
+				if (qlabMessage.needsReply) {
+				    qlabMessage.on("replyRaw", function(data) { 
+                        qlabMessage.needsReply = false; 
+                        qlabMessage.data = data;
+                        console.log("Reply received");
+                        qlabMessage.fromSlip(function() {console.log("message decoded"); qlabMessage.fromOSCBuffer().fromJSON().emit("reply");} );
+                    });
+				}
+				
 				//If port is not already open, then open it.
 				//Once it's open, attach event listeners and
 				//Send message.
@@ -355,6 +361,9 @@ module.exports = function(RED) {
 						qlabMessage.checkReply;
                     });	
                     
+
+			    	
+                    
 					node.socket.write(qlabMessage.data, function() {
 						if (node.numListening === 0) {
 							node.socket.destroy();
@@ -379,7 +388,21 @@ module.exports = function(RED) {
 					}
 				});
 			}
+			
+			
 			else if (node.protocol == "udp") {
+			    
+			    qlabMessage.toOSC().toBuffer();
+			    
+			    if (qlabMessage.needsReply) {
+                    qlabMessage.on("replyRaw", function(data) { 
+                        qlabMessage.needsReply = false; 
+                        qlabMessage.data = data;
+                        console.log("Reply received");
+                        qlabMessage.fromOSCBuffer().fromJSON().emit("reply");
+                    });
+			    }
+			    
 			    if (qlabMessage.needsReply) {  
 				
 					if (!node.listening) {
@@ -419,8 +442,9 @@ module.exports = function(RED) {
 						});	                    									
 					}					
 				}
-				
-				node.socket.send(qlabMessage.data,node.sendPort,node.ipAddress, function(error) {
+			    	
+				node.socket.send(qlabMessage.data,0, qlabMessage.data.length, node.sendPort,node.ipAddress, function(error) {
+				    node.log("packet sent");
 					if (error) {node.socket.emit('error', new Error(error.message)); }
 					if (node.numListening === 0) {
 							node.socket.close();
@@ -501,17 +525,19 @@ module.exports = function(RED) {
 		};
 		
 		this.fromSlip = function(callback) {
+			console.log("made it to slip function");
 			
-			function emitError(message, errorMessage) {
+			var handleReply = function(message) {
+			    qlabMessage.data = message;
+			    callback();
+			};
+			
+			var emitError = function(message, errorMessage) {
 				qlabMessage.emit("error", new Error(errorMessage));
-			}
+			};
 			
 			var decoder = new slip.Decoder({
-				onMessage: function(message) {
-								qlabMessage.data = message;
-								console.log("made it to the slip callback");
-								callback();
-								},
+				onMessage: handleReply,
 				onError  : emitError
 			});
 
@@ -520,27 +546,33 @@ module.exports = function(RED) {
 			return qlabMessage;
 		};
 		
-		this.getData = function() {
-			
+		this.fromJSON = function() {
+            try {
+                qlabMessage.data.args[0] = JSON.parse(qlabMessage.data.args[0]);
+                
+                //If there's only one argument and it just got turned into
+                //an object, than replace array with that object.
+                if (qlabMessage.data.args.length == 1) {
+                    qlabMessage.data.args = qlabMessage.data.args[0];
+                }
+            } 
+            catch (e) {
+                //wasn't JSON, do nothing.
+            }
+            return qlabMessage;
 		};
 		
-		this.getReply = function() {
-			
-		};
-		
+		//overwrite this function in nodes above, with code specifically
+		//meant to verify reply for given message.
+		//Should return true if qlabMessage needs reply AND the 
+		//reply received is for the message sent. Otherwise,
+		//return false (including if the message simply needs no reply)
 		this.verifyReply = function() {
-			//preferably, each instance would overwrite this function.
 			if (qlabMessage.needsReply)
 				{ return true; }
 			else 
 				{ return false; }
 		};
-		
-		qlabMessage.on("replyRaw", function() { 
-			qlabMessage.needsReply = false; 
-			qlabMessage.fromSlip(function() {qlabMessage.fromOSCBuffer().emit("reply");} );
-			console.log("Reply received");
-		});
 		
 	}
 	util.inherits(QlabMessage, EventEmitter);
