@@ -3,7 +3,8 @@
     "version"      : "0.0.1",
     "description"  : "A Node-Red node to communicate with Qlab",
     "dependencies": {
-                     "osc": "2.x" 
+                     "osc": "2.x",
+                     "slip": "1.0.2"
                     },
     "keywords": [ "qlab" ],
     
