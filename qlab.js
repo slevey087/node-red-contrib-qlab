@@ -269,44 +269,81 @@ module.exports = function(RED) {
 			var caller = callingNode;
 			
 			if (waitForReply) { node.numListening++; }			
-
+            
+            
+			if (!node.socket) {
+			    node.createSocket();
+			}
 			
-			if (node.socket) {
-								
-				if (node.protocol == "tcp") {
-					
-					if (waitForReply) {  
-						node.socket.once("data", function() { node.numListening--; } )
-					}	
-					
-					if (!node.listening) {
-						node.socket.connect(node.sendPort, node.ipAddress, function(){
-							node.listening = true;
-							
-							node.socket.once("data", function(data) {
-								caller.emit("socketReply", data);
-								
-								if (node.numListening === 0) {
-									node.socket.destroy();
-									node.listening = false;
-								}
-							});							
-							node.socket.write(message);
-						});
-					}
-					else { 
+			if (node.protocol == "tcp") {
+				
+				if (waitForReply) {  
+					node.socket.once("data", function() { node.numListening--; } )
+				}	
+				
+				if (!node.listening) {
+					node.socket.connect(node.sendPort, node.ipAddress, function(){
+						node.listening = true;
+						
 						node.socket.once("data", function(data) {
+							caller.emit("socketReply", data);
+							
 							if (node.numListening === 0) {
 								node.socket.destroy();
 								node.listening = false;
 							}
+						});							
+						node.socket.write(message);
+					});
+				}
+				else { 
+					node.socket.once("data", function(data) {
 						
+						if (node.numListening === 0) {
+							node.socket.destroy();
+							node.listening = false;
+						}
+					
+						caller.emit("socketReply", data);
+                    });	
+                    
+					node.socket.write(message); 
+					
+				}
+			}
+			else if (node.protocol == "udp") {
+			    if (waitForReply) {  
+					node.socket.once("message", function() { node.numListening--; } )
+				}	
+				
+				if (!node.listening) {
+					node.socket.bind(node.listenPort, node.ipAddress, function(){
+						node.listening = true;
+						
+						node.socket.once("message", function(data) {
 							caller.emit("socketReply", data);
-                        });	
-                        
-						node.socket.write(message); 
+							
+							if (node.numListening === 0) {
+								node.socket.destroy();
+								node.listening = false;
+							}
+						});							
+						node.socket.write(message);
+					});
+				}
+				else { 
+					node.socket.once("data", function(data) {
 						
-					}
+						if (node.numListening === 0) {
+							node.socket.destroy();
+							node.listening = false;
+						}
+					
+						caller.emit("socketReply", data);
+                    });	
+                    
+					node.socket.write(message); 
+					
 				}
 			}
 		};
