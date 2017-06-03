@@ -221,6 +221,8 @@ module.exports = function(RED) {
         this.sendPort	= 53000;
         this.listenPort = 53001;	//for UDP only
         
+		this.numListening = 0;
+		
         var node = this;
      
 	 
@@ -232,20 +234,7 @@ module.exports = function(RED) {
 				if (node.protocol == 'tcp') {
 					
 					//create TCP socket
-					node.socket = new net.Socket();
-					
-					node.socket.on("connect", function() {
-						node.emit("socketOpen");
-					});
-					
-					node.socket.on("data", function(data) {
-						info = {address:node.ipAddress};
-						node.emit("socketMessage", data, info);
-					});
-					
-					node.socket.on("close", function(had_error) {
-						node.emit("socketClose");
-					});
+					node.socket = new net.Socket();															
 					
 					node.socket.on("error", function(error) {
 						node.emit("error", error);
@@ -259,19 +248,7 @@ module.exports = function(RED) {
 					
 										node.socket.on("connect", function() {
 						
-					});
-					
-					node.socket.on("listening", function() {
-						node.emit("socketOpen");
-					});
-					
-					node.socket.on("message", function(message, info) {
-						node.emit("socketMessage", message, info);
-					});
-					
-					node.socket.on("close", function() {
-						node.emit("socketClose");
-					});
+					});					
 					
 					node.socket.on("error", function(error) {
 						node.emit("error", error);
@@ -286,20 +263,34 @@ module.exports = function(RED) {
 		};
 		
 		
-		this.send = function(message, callback) {
-			var onSend = callback;
+		this.send = function(message, waitForReply, callback) {
+			var onReply = callback;
 			var toSend = message;
+			
+			
+			if (!callback) {
+				onReply = function
+			}
 			
 			if (node.socket) {
 				
+				
 				if (node.protocol == "tcp") {
+					
+					if (waitForReply) { 
+						node.numListening++; 
+						node.socket.once("data", function() { node.numListening--; } )
+					}	
+					
 					if (!node.listening) {
 						node.socket.connect(node.sendPort, node.ipAddress, function(){
 							node.listening = true;
-							node.socket.write(message,null,onSend);
+							
+							node.socket.once("data")							
+							node.socket.write(message);
 						});
 					}
-					else { node.socket.write(message,null,onSend); }
+					else { node.socket.write(message); }
 				}
 			}
 		};
@@ -311,3 +302,4 @@ module.exports = function(RED) {
     RED.nodes.registerType("qlab config",QlabConfig);       
     
 };
+
