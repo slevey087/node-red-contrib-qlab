@@ -362,8 +362,8 @@ module.exports = function(RED) {
 				//Once it's open, attach event listeners and
 				//Send message.
 				if (!node.listening) {
-					node.socket.connect(node.sendPort, node.ipAddress, function(){
-						node.listening = true;
+					node.listening = true;
+					node.socket.connect(node.sendPort, node.ipAddress, function(){						
 						node.log("Listening on socket. numListening = " + node.numListening);
 						
 						//if there's a passcode, send "/connect" message first
