@@ -44,6 +44,7 @@
 			passcode: {value:"",
 				validate: function(v) { return (v.match(/^\d\d\d\d$/) || v === ""); }}, 
 			workspaceId: { value:""},
+			command: {value:""},
             name: {value:""}
         },
         inputs:1,
@@ -67,6 +68,10 @@
         <label for="node-input-workspaceId"><i class="fa fa-address-card"></i> Workspace ID: </label>
         <input type="text" id="node-input-workspaceId" placeholder="optional">
      </div>	
+	<div class="form-row">
+        <label for="node-input-command"><i class="fa fa-terminal"></i> Command: </label>
+        <input type="text" id="node-input-command" placeholder="/an/OSC/path with some arguments">
+     </div>	
     <div class="form-row">
         <label for="node-input-name"><i class="icon-tag"></i> Name</label>
         <input type="text" id="node-input-name" placeholder="Name">
@@ -85,6 +90,7 @@
 			passcode: {value:"",
 		       validate: function(v) { return (v.match(/^\d\d\d\d$/) || v === ""); }}, 
 			workspaceId: { value:""},
+			command: {value:""},
             name: {value:""}
         },
         inputs:1,
@@ -108,6 +114,10 @@
         <label for="node-input-workspaceId"><i class="fa fa-address-card"></i> Workspace ID: </label>
         <input type="text" id="node-input-workspaceId" placeholder="optional">
      </div>	
+	<div class="form-row">
+        <label for="node-input-command"><i class="fa fa-terminal"></i> Command: </label>
+        <input type="text" id="node-input-command" placeholder="/an/OSC/path with some arguments">
+     </div>		 
     <div class="form-row">
         <label for="node-input-name"><i class="icon-tag"></i> Name</label>
         <input type="text" id="node-input-name" placeholder="Name">
