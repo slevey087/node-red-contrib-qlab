@@ -170,20 +170,36 @@ module.exports = function(RED) {
         node.on('input', function(msg) {
 			var packet;
 			var command;
+			var args;
 			
 			if (node.command) {
 				command = node.command.split(" ");
 				
-				packet = {address: command[0], args: command.slice(1)};
+				packet = {address: command[0], args: command.slice(1)};				
 				if (packet.args === "") { packet.args = undefined; }
-			}
+			}						
 			else if (msg.topic) {
 				packet = {address:msg.topic, args:msg.payload}; 
 				if (packet.args === "") { packet.args = undefined; }
 			}
+			else if (msg.payload.address) {
+				args = msg.payload.args || null;
+				packet = {address:msg.payload.address, args: args}
+			}
+			else if (typeof msg.payload == "string" && msg.payload !== "") {
+				command = msg.payload.split(" ");
+				packet = {address: command[0], args: command.slice(1)};
+			}
+			else {
+				packet = null;
+			}
+
 			
             try 
 			{				
+				if (!packet) {
+					throw new Error("Received no data. Please use documented format.")
+				}
 				var qlabMessage = new QlabMessage(packet, false, node.passcode);
 				
 				node.qlab.createSocket().send(qlabMessage);
@@ -216,6 +232,7 @@ module.exports = function(RED) {
         node.on('input', function(msg) {
 			var packet;
 			var command;
+			var args;
 			
 			if (node.command) {
 				command = node.command.split(" ");
@@ -227,9 +244,23 @@ module.exports = function(RED) {
 				packet = {address:msg.topic, args:msg.payload}; 
 				if (packet.args === "") { packet.args = undefined; }
 			}
+			else if (msg.payload.address) {
+				args = msg.payload.args || null;
+				packet = {address:msg.payload.address, args: args}
+			}
+			else if (typeof msg.payload == "string" && msg.payload !== "") {
+				command = msg.payload.split(" ");
+				packet = {address: command[0], args: command.slice(1)};
+			}
+			else {
+				packet = null;
+			}
 			
             try 
-			{				
+			{	
+				if (!packet) {
+					throw new Error("Received no data. Please use documented format.")
+				}
 				var qlabMessage = new QlabMessage(packet, true, node.passcode);
 
 				
