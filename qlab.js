@@ -151,6 +151,7 @@ module.exports = function(RED) {
     RED.nodes.registerType("qlab in",QlabIn);
 
     
+    
     function QlabOut(config) {
         RED.nodes.createNode(this,config);
         
@@ -170,11 +171,12 @@ module.exports = function(RED) {
 			
 			if (msg.topic) {
 				packet = {address:msg.topic, args:msg.payload}; 
+				if (packet.args === "") { packet.args = undefined; }
 			}
 			
             try 
 			{				
-				var qlabMessage = new QlabMessage(packet, false);
+				var qlabMessage = new QlabMessage(packet, false, node.passcode);
 				
 				node.qlab.createSocket().send(qlabMessage);
 			}
@@ -187,6 +189,7 @@ module.exports = function(RED) {
     
     }
     RED.nodes.registerType("qlab out",QlabOut);
+    
     
     
     function QlabQuery(config) {
@@ -206,17 +209,24 @@ module.exports = function(RED) {
 			
 			if (msg.topic) {
 				packet = {address:msg.topic, args:msg.payload}; 
+				if (packet.args === "") { packet.args = undefined; }
 			}
 			
             try 
 			{				
-				var qlabMessage = new QlabMessage(packet, true);
-				qlabMessage.on('noReply', function(){
-					node.log("No reply, closing socket");
-				});
+				var qlabMessage = new QlabMessage(packet, true, node.passcode);
+
 				
 				qlabMessage.on('reply', function(){
-					node.send({payload:qlabMessage.data});
+					node.send({payload:qlabMessage.reply});
+				});
+				
+				qlabMessage.on('noReply', function(){
+					node.warn("No reply, closing socket");
+				});				
+				
+				qlabMessage.on('error', function(error){
+				    node.error(error.message);
 				});
 				
 				node.qlab.createSocket().send(qlabMessage);
@@ -229,6 +239,7 @@ module.exports = function(RED) {
     
     }
     RED.nodes.registerType("qlab query",QlabQuery);    
+    
     
     
     function QlabConfig(config) {
@@ -257,7 +268,18 @@ module.exports = function(RED) {
 					
 					node.socket.on("error", function(error) {
 						node.emit("error", error);
-					});									
+					});	
+					
+					node.socket.on("data", function(data) {
+                        console.log("num listening: " + node.numListening);
+                        //If nobody is listening, destroy socket.
+                        if (node.numListening === 0) {
+                            node.socket.destroy();
+                            console.log("listener count" + node.socket.listenerCount("data"));
+                            node.listening = false;
+                            node.log("Nobody listening, socket destroyed");
+                        }							
+                    });	
 				}
 				
 				else if (node.protocol == "udp") {
@@ -271,7 +293,17 @@ module.exports = function(RED) {
 					
 					node.socket.on("error", function(error) {
 						node.emit("error", error);
-					});										
+					});	
+					
+                    node.socket.on("message", function(data) {
+                        //destroy socket if nobody is waiting for a reply		
+                        if (node.numListening === 0) {
+                            node.socket.close();
+                            console.log("listener count" + node.socket.listenerCount("data"));
+                            node.socket = undefined;
+                            node.listening = false;
+                        }
+                    });						
 				}
 				
 				
@@ -292,18 +324,39 @@ module.exports = function(RED) {
 			    node.createSocket();
 			}
 			
+			var addReplyListener;
+			
 			if (node.protocol == "tcp") {	
 				
-				qlabMessage.toOSC().toSlip().toBuffer();
+				addReplyListener = function() {
+				    node.socket.prependOnceListener("data", function(data){
+				        qlabMessage.emit("replyRaw", data);
+				    });
+				};
+				
 				
 				if (qlabMessage.needsReply) {
-				    qlabMessage.on("replyRaw", function(data) { 
-                        qlabMessage.needsReply = false; 
-                        qlabMessage.data = data;
+                    qlabMessage.on("replyRaw", function(data) { 
+                        
+                        qlabMessage.reply = data;
                         console.log("Reply received");
-                        qlabMessage.fromSlip(function() {console.log("message decoded"); qlabMessage.fromOSCBuffer().fromJSON().emit("reply");} );
+                        qlabMessage.fromSlip(function() { qlabMessage.fromOSCBuffer().fromJSON(); } );
+                        
+                        if (qlabMessage.verifyReply()) { 
+							node.numListening--; 
+                            qlabMessage.needsReply = false; 
+                            qlabMessage.emit("reply");
+                        }
+                        else {
+                            addReplyListener();
+                        }
                     });
 				}
+                
+                addReplyListener();						
+
+                //encode message to send
+				qlabMessage.toOSC().toSlip().toBuffer();
 				
 				//If port is not already open, then open it.
 				//Once it's open, attach event listeners and
@@ -313,22 +366,10 @@ module.exports = function(RED) {
 						node.listening = true;
 						node.log("Listening on socket. numListening = " + node.numListening);
 						
-						//If a reply is received, verify that it's for the sending message
-						//If so, pass along data. If not, keep listening
-						node.socket.once("data", function(data) {
-							if (qlabMessage.verifyReply()) { 
-								node.numListening--; 
-								qlabMessage.emit("replyRaw", data);
-							}								
-							
-							console.log(node.numListening);
-							//If nobody is listening, destroy socket.
-							if (node.numListening === 0) {
-								node.socket.destroy();
-								node.listening = false;
-								node.log("Socket destroyed");
-							}							
-						});	
+						//if there's a passcode, send "/connect" message first
+						if (qlabMessage.passcode) {
+						    node.socket.write(qlabMessage.generateConnectMessage("tcp"));
+						}
 						
 						//Send message, and close port when finished, unless this or another
 						//message is still waiting for a reply.
@@ -339,41 +380,24 @@ module.exports = function(RED) {
 								node.log("Socket closed because nobody listening");
 							}	
 						});
-						
-						
 					});
 				}
+				
 				else { 
-					node.socket.once("data", function(data) {
-						if (qlabMessage.verifyReply()) { 
-							node.numListening--; 
-							qlabMessage.emit("replyRaw", data);
-						}	
-						
-						
-						if (node.numListening === 0) {
-							node.socket.destroy();
-							node.listening = false;
-							node.log("Socket destroyed");
-						}
-					
-						qlabMessage.emit("replyRaw", data);
-						qlabMessage.checkReply;
-                    });	
+                    //if there's a passcode, send "/connect" message first
+					if (qlabMessage.passcode) {
+					    node.socket.write(qlabMessage.generateConnectMessage("tcp"));
+					}
                     
-
-			    	
-                    
-					node.socket.write(qlabMessage.data, function() {
+                    node.socket.write(qlabMessage.data, function() {
 						if (node.numListening === 0) {
 							node.socket.destroy();
 							node.listening = false;
 							node.log("Socket closed because nobody listening");
 						}	
 					}); 
-					
-					
 				}
+				
 				node.socket.setTimeout(1000, function() {
 					if (qlabMessage.needsReply) {
 						node.numListening--;
@@ -392,56 +416,50 @@ module.exports = function(RED) {
 			
 			else if (node.protocol == "udp") {
 			    
-			    qlabMessage.toOSC().toBuffer();
-			    
-			    if (qlabMessage.needsReply) {
-                    qlabMessage.on("replyRaw", function(data) { 
-                        qlabMessage.needsReply = false; 
-                        qlabMessage.data = data;
-                        console.log("Reply received");
-                        qlabMessage.fromOSCBuffer().fromJSON().emit("reply");
-                    });
-			    }
-			    
-			    if (qlabMessage.needsReply) {  
+			    addReplyListener = function() {
+				    node.socket.prependOnceListener("message", function(data){
+				        qlabMessage.emit("replyRaw", data);
+				    });
+				};
 				
+				
+                if (qlabMessage.needsReply) {
+                    qlabMessage.on("replyRaw", function(data) { 
+                        
+                        qlabMessage.reply = data;
+                        console.log("Reply received");
+                        qlabMessage.fromOSCBuffer().fromJSON();
+                        
+                        if (qlabMessage.verifyReply()) { 
+							node.numListening--; 
+                            qlabMessage.needsReply = false; 
+                            console.log("reply verified");
+                            qlabMessage.emit("reply");
+                        }
+                        else {
+                            addReplyListener();
+                        }
+                    });
+                }
+                
+                addReplyListener();
+                
+                //encode message to send
+                qlabMessage.toOSC().toBuffer();
+                
+                if (qlabMessage.needsReply) {  
 					if (!node.listening) {
-						node.socket.bind(node.listenPort, node.ipAddress, function(){
+						node.socket.bind(node.listenPort, "0.0.0.0", function(){
 							node.listening = true;
 							node.log("Port bound");
-							
-							node.socket.once("message", function(data) {
-								if (qlabMessage.verifyReply()) { 
-									node.numListening--; 
-									qlabMessage.emit("replyRaw", data);
-								}								
-								
-								if (node.numListening === 0) {
-									node.socket.close();
-									node.socket = undefined;
-									node.listening = false;
-								}
-							});							
 						});
 					}
-					else { 
-						node.socket.once("message", function(data) {
-							if (qlabMessage.verifyReply()) { 
-								node.numListening--; 
-								qlabMessage.emit("replyRaw", data);
-							}							
-						
-						
-							if (node.numListening === 0) {
-								node.socket.close();
-								node.socket = undefined;
-								node.listening = false;
-							}
-					
-							
-						});	                    									
-					}					
 				}
+			    
+				//if there's a passcode, send "/connect" message first
+				if (qlabMessage.passcode) {
+				    node.socket.send(qlabMessage.generateConnectMessage("udp"),0, qlabMessage.connectMessage.length, node.sendPort,node.ipAddress);
+				}			    
 			    	
 				node.socket.send(qlabMessage.data,0, qlabMessage.data.length, node.sendPort,node.ipAddress, function(error) {
 				    node.log("packet sent");
@@ -476,28 +494,47 @@ module.exports = function(RED) {
 		    node.numListening = 0;
 		    node.socket = undefined;
 		};
-	 
-	 
-
-	 
     }
     RED.nodes.registerType("qlab config",QlabConfig);       
     
-	function QlabMessage(data, needsReply, callingNode) {
+    
+    
+    
+	function QlabMessage(data, needsReply, passcode) {
 		 EventEmitter.call(this);
 		
 		this.data = data;
 		this.needsReply = needsReply;
-		this.callingNode = callingNode;
+		this.passcode = passcode || null;
 		
-		this.reply = {};
+		this.connectMessage = null;
 		
 		var qlabMessage = this;
-						
-		this.toSlip = function() {
-			qlabMessage.data = slip.encode(qlabMessage.data);
-			return qlabMessage;
-		};
+		
+		
+        this.generateConnectMessage = function(protocol) {
+            var packet = {address:"/connect", args:qlabMessage.passcode};
+            
+            if (protocol == "tcp") {
+                try {
+                    qlabMessage.connectMessage = new Buffer(slip.encode(osc.writePacket(packet)));
+                    return qlabMessage.connectMessage;
+                }   
+                catch (error) {
+                    qlabMessage.emit("error", new Error(error.message));
+                }
+            }
+            else if (protocol == "udp") {
+                try {
+                    qlabMessage.connectMessage = new Buffer(osc.writePacket(packet));
+                    return qlabMessage.connectMessage;
+                }   
+                catch (error) {
+                    qlabMessage.emit("error", new Error(error.message));
+                }
+            }
+        };
+		
 		
 		this.toOSC = function() {
 			try {
@@ -509,14 +546,22 @@ module.exports = function(RED) {
 			return qlabMessage;
 		};
 		
+						
+		this.toSlip = function() {
+			qlabMessage.data = slip.encode(qlabMessage.data);
+			return qlabMessage;
+		};
+		
+		
 		this.toBuffer = function() {
 			qlabMessage.data = new Buffer(qlabMessage.data);
 			return qlabMessage;
 		};
 		
+		
 		this.fromOSCBuffer = function() {
 			try {
-				qlabMessage.data = osc.readPacket(qlabMessage.data, {metadata:false, unpackSingleArgs:false});
+				qlabMessage.reply = osc.readPacket(qlabMessage.reply, {metadata:false, unpackSingleArgs:false});
 			}
 			catch (error) {
 				qlabMessage.emit("error", new Error(error.message));
@@ -524,11 +569,11 @@ module.exports = function(RED) {
 			return qlabMessage;
 		};
 		
+		
 		this.fromSlip = function(callback) {
-			console.log("made it to slip function");
-			
+		    
 			var handleReply = function(message) {
-			    qlabMessage.data = message;
+			    qlabMessage.reply = message;
 			    callback();
 			};
 			
@@ -541,19 +586,20 @@ module.exports = function(RED) {
 				onError  : emitError
 			});
 
-			decoder.decode(qlabMessage.data);
+			decoder.decode(qlabMessage.reply);
 			
 			return qlabMessage;
 		};
 		
+		
 		this.fromJSON = function() {
             try {
-                qlabMessage.data.args[0] = JSON.parse(qlabMessage.data.args[0]);
+                qlabMessage.reply.args[0] = JSON.parse(qlabMessage.reply.args[0]);
                 
                 //If there's only one argument and it just got turned into
                 //an object, than replace array with that object.
-                if (qlabMessage.data.args.length == 1) {
-                    qlabMessage.data.args = qlabMessage.data.args[0];
+                if (qlabMessage.reply.args.length == 1) {
+                    qlabMessage.reply.args = qlabMessage.reply.args[0];
                 }
             } 
             catch (e) {
@@ -562,14 +608,26 @@ module.exports = function(RED) {
             return qlabMessage;
 		};
 		
+		
 		//overwrite this function in nodes above, with code specifically
 		//meant to verify reply for given message.
 		//Should return true if qlabMessage needs reply AND the 
 		//reply received is for the message sent. Otherwise,
 		//return false (including if the message simply needs no reply)
 		this.verifyReply = function() {
-			if (qlabMessage.needsReply)
-				{ return true; }
+			if (qlabMessage.needsReply) { 
+				
+				if (!qlabMessage.reply.address.match(/connect$/))
+				{ 
+                    return true; 
+				}
+				else { 
+                    if (qlabMessage.reply.args.data == "badpass") {
+                        qlabMessage.emit("error", new Error("Incorrect passcode"));
+                    }
+                    return false; 
+				}
+			}
 			else 
 				{ return false; }
 		};
