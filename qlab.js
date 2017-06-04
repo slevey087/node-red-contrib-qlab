@@ -163,6 +163,15 @@ module.exports = function(RED) {
 		
         var node = this;
         
+		var currentMessage = null;
+		
+		if (node.workspaceId) {
+			node.workspaceString = "/workspace/" + node.workspaceId;
+        }
+		else {
+			node.workspaceString = "";
+		}
+		
 		node.qlab.createSocket();
 		
 		//put event handlers here
@@ -177,14 +186,14 @@ module.exports = function(RED) {
 				
 				packet = {address: command[0], args: command.slice(1)};				
 				if (packet.args === "") { packet.args = undefined; }
-			}						
-			else if (msg.topic) {
-				packet = {address:msg.topic, args:msg.payload}; 
-				if (packet.args === "") { packet.args = undefined; }
 			}
 			else if (msg.payload.address) {
 				args = msg.payload.args || null;
 				packet = {address:msg.payload.address, args: args}
+			}			
+			else if (msg.topic) {
+				packet = {address:msg.topic, args:msg.payload}; 
+				if (packet.args === "") { packet.args = undefined; }
 			}
 			else if (typeof msg.payload == "string" && msg.payload !== "") {
 				command = msg.payload.split(" ");
@@ -192,6 +201,11 @@ module.exports = function(RED) {
 			}
 			else {
 				packet = null;
+			}
+			
+			
+			if ((packet) && msg.workspace !== false) {
+				packet.address = node.workspaceString + packet.address;
 			}
 
 			
@@ -206,11 +220,14 @@ module.exports = function(RED) {
 			}
 			catch (error) {
 				node.error(error.message);
+			}						
+        });   
+		node.on('close', function() {
+			if (currentMessage) {
+				currentMessage.message = "";
+				currentMessage.needsReply = false;				
 			}
-			
-			
-        });
-    
+		});
     }
     RED.nodes.registerType("qlab out",QlabOut);
     
@@ -227,8 +244,15 @@ module.exports = function(RED) {
 		
         var node = this;
 		
+		var currentMessage = null;
 		
-        
+		if (node.workspaceId) {
+			node.workspaceString = "/workspace/" + node.workspaceId;
+        }
+		else {
+			node.workspaceString = "";
+		}
+		
         node.on('input', function(msg) {
 			var packet;
 			var command;
@@ -239,14 +263,14 @@ module.exports = function(RED) {
 				
 				packet = {address: command[0], args: command.slice(1)};				
 				if (packet.args === "") { packet.args = undefined; }
-			}						
-			else if (msg.topic) {
-				packet = {address:msg.topic, args:msg.payload}; 
-				if (packet.args === "") { packet.args = undefined; }
 			}
 			else if (msg.payload.address) {
 				args = msg.payload.args || null;
 				packet = {address:msg.payload.address, args: args}
+			}			
+			else if (msg.topic) {
+				packet = {address:msg.topic, args:msg.payload}; 
+				if (packet.args === "") { packet.args = undefined; }
 			}
 			else if (typeof msg.payload == "string" && msg.payload !== "") {
 				command = msg.payload.split(" ");
@@ -256,13 +280,21 @@ module.exports = function(RED) {
 				packet = null;
 			}
 			
+			
+			if ((packet) && msg.workspace !== false) {
+				packet.address = node.workspaceString + packet.address;
+			}
+			
+			
             try 
 			{	
 				if (!packet) {
 					throw new Error("Received no data. Please use documented format.")
 				}
 				var qlabMessage = new QlabMessage(packet, true, node.passcode);
-
+				
+				//In order to clear message when flow stops
+				currentMessage = qlabMessage;
 				
 				qlabMessage.on('reply', function(){
 					node.send({payload:qlabMessage.reply});
@@ -279,10 +311,17 @@ module.exports = function(RED) {
 				node.qlab.createSocket().send(qlabMessage);
 			}
 			catch (error) {
-				node.error(error.message);
+				node.error(error.message, msg);
+				msg = {};
 			}
-			
         });
+		
+		node.on('close', function() {
+			if (currentMessage) {
+				currentMessage.message = "";
+				currentMessage.needsReply = false;				
+			}
+		});
     
     }
     RED.nodes.registerType("qlab query",QlabQuery);    
@@ -375,6 +414,11 @@ module.exports = function(RED) {
 			
 			if (node.protocol == "tcp") {	
 				
+				//encode message to send. Do this first so that any errors
+				//from incorrect message formatting stop the flow before
+				//event handlers get attached to the socket.
+				qlabMessage.toOSC().toSlip().toBuffer();
+				
 				addReplyListener = function() {
 				    node.socket.prependOnceListener("data", function(data){
 				        qlabMessage.emit("replyRaw", data);
@@ -402,8 +446,6 @@ module.exports = function(RED) {
                 
                 addReplyListener();						
 
-                //encode message to send
-				qlabMessage.toOSC().toSlip().toBuffer();
 				
 				//If port is not already open, then open it.
 				//Once it's open, attach event listeners and
@@ -462,7 +504,11 @@ module.exports = function(RED) {
 			
 			
 			else if (node.protocol == "udp") {
-			    
+			    //encode message to send. Do this first so that any errors
+				//from incorrect message formatting stop the flow before
+				//event handlers get attached to the socket.
+				qlabMessage.toOSC().toBuffer();
+				
 			    addReplyListener = function() {
 				    node.socket.prependOnceListener("message", function(data){
 				        qlabMessage.emit("replyRaw", data);
@@ -489,10 +535,8 @@ module.exports = function(RED) {
                     });
                 }
                 
-                addReplyListener();
-                
-                //encode message to send
-                qlabMessage.toOSC().toBuffer();
+				
+                addReplyListener();                               
                 
                 if (qlabMessage.needsReply) {  
 					if (!node.listening) {
@@ -662,17 +706,38 @@ module.exports = function(RED) {
 		//reply received is for the message sent. Otherwise,
 		//return false (including if the message simply needs no reply)
 		this.verifyReply = function() {
+			//Only return true if actually listening for reply
 			if (qlabMessage.needsReply) { 
 				
-				if (!qlabMessage.reply.address.match(/connect$/))
-				{ 
-                    return true; 
+				sentAddress = qlabMessage.data.split("/");
+				replyAddress = qlabMessage.reply.split("/");
+				
+				//only return true if reply actually came from Qlab.
+				//All Qlab replies begin with "/reply"
+				if (replyAddress[1] == "reply") {
+				
+					//If final elements in both addresses are the same return true.
+					//The whole addresses might not be the same because Qlab
+					//Auto fills the workspace/id section if it is left out.
+					if (sentAddress[sentAddres.length - 1] == replyAddress[replyAddress.length - 1])
+					{ 
+						return true; 
+					}
+					
+					//If reply is to connect request, ignore it, but send error
+					//if bad passcode.
+					else if (qlabMessage.reply.address.match(/connect$/)) {
+						if (qlabMessage.reply.args.data == "badpass") {
+							qlabMessage.emit("error", new Error("Incorrect passcode"));
+						}
+						return false; 
+					}
+					else {
+						return false;
+					}
 				}
-				else { 
-                    if (qlabMessage.reply.args.data == "badpass") {
-                        qlabMessage.emit("error", new Error("Incorrect passcode"));
-                    }
-                    return false; 
+				else {
+					return false;
 				}
 			}
 			else 
