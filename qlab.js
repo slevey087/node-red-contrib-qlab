@@ -159,6 +159,7 @@ module.exports = function(RED) {
         this.qlab 		 = RED.nodes.getNode(config.qlab);
 		this.passcode 	 = config.passcode;
 		this.workspaceId = config.workspaceId;
+		this.command 	 = config.command
 		
         var node = this;
         
@@ -168,8 +169,15 @@ module.exports = function(RED) {
 		
         node.on('input', function(msg) {
 			var packet;
+			var command;
 			
-			if (msg.topic) {
+			if (node.command) {
+				command = node.command.split(" ");
+				
+				packet = {address: command[0], args: command.slice(1)};
+				if (packet.args === "") { packet.args = undefined; }
+			}
+			else if (msg.topic) {
 				packet = {address:msg.topic, args:msg.payload}; 
 				if (packet.args === "") { packet.args = undefined; }
 			}
@@ -199,6 +207,7 @@ module.exports = function(RED) {
         this.qlab 		 = RED.nodes.getNode(config.qlab);
 		this.passcode 	 = config.passcode;
 		this.workspaceId = config.workspaceId;
+		this.command 	 = config.command;
 		
         var node = this;
 		
@@ -206,8 +215,15 @@ module.exports = function(RED) {
         
         node.on('input', function(msg) {
 			var packet;
+			var command;
 			
-			if (msg.topic) {
+			if (node.command) {
+				command = node.command.split(" ");
+				
+				packet = {address: command[0], args: command.slice(1)};				
+				if (packet.args === "") { packet.args = undefined; }
+			}						
+			else if (msg.topic) {
 				packet = {address:msg.topic, args:msg.payload}; 
 				if (packet.args === "") { packet.args = undefined; }
 			}
