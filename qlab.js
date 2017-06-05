@@ -163,6 +163,7 @@ module.exports = function(RED) {
 		
         var node = this;
         
+        node.debug = false;
 		var currentMessage = null;
 		
 		if (node.workspaceId) {
@@ -172,14 +173,25 @@ module.exports = function(RED) {
 			node.workspaceString = "";
 		}
 		
-		node.qlab.createSocket();
-		
-		//put event handlers here
 		
         node.on('input', function(msg) {
 			var packet;
 			var command;
 			var args;
+			var debug = null;
+			
+			if (msg._qlab) {
+                if (msg._qlab._debug) {
+                    node.debug = true;
+			        debug = true;
+			        node.log("debug mode on.")
+                }
+                else if (msg._qlab._debug === false) {
+                    node.debug = false;
+                    debug = false;
+                    node.log("debug mode off.")
+                }
+			}
 			
 			if (node.command) {
 				command = node.command.split(" ");
@@ -208,15 +220,23 @@ module.exports = function(RED) {
 				packet.address = node.workspaceString + packet.address;
 			}
 
+			if (node.debug) { node.log("packet to send: " + JSON.stringify(packet)); }
 			
             try 
 			{				
 				if (!packet) {
 					throw new Error("Received no data. Please use documented format.")
 				}
-				var qlabMessage = new QlabMessage(packet, false, node.passcode);
+				var qlabMessage = new QlabMessage(packet, false, node.passcode, node.debug);
 				
-				node.qlab.createSocket().send(qlabMessage);
+				//In order to clear message when flow stops
+				currentMessage = qlabMessage;
+				
+				qlabMessage.on('error', function(error){
+				    node.error(error.message);
+				});				
+				
+				node.qlab.setDebug(debug).createSocket().send(qlabMessage);
 			}
 			catch (error) {
 				node.error(error.message);
@@ -225,7 +245,7 @@ module.exports = function(RED) {
 		node.on('close', function() {
 			if (currentMessage) {
 				currentMessage.message = "";
-				currentMessage.needsReply = false;				
+				currentMessage.needsReply = false;
 			}
 		});
     }
@@ -244,6 +264,7 @@ module.exports = function(RED) {
 		
         var node = this;
 		
+        node.debug = false;		
 		var currentMessage = null;
 		
 		if (node.workspaceId) {
@@ -257,6 +278,20 @@ module.exports = function(RED) {
 			var packet;
 			var command;
 			var args;
+			var debug = null;
+			
+			if (msg._qlab) {
+                if (msg._qlab._debug) {
+                    node.debug = true;
+			        debug = true;
+			        node.log("debug mode on.")
+                }
+                else if (msg._qlab._debug === false) {
+                    node.debug = false;
+                    debug = false;
+                    node.log("debug mode off.")
+                }
+			}		
 			
 			if (node.command) {
 				command = node.command.split(" ");
@@ -286,18 +321,21 @@ module.exports = function(RED) {
 			}
 			
 			
+			if (node.debug) { node.log("packet to send: " + JSON.stringify(packet)); }			
+			
             try 
 			{	
 				if (!packet) {
 					throw new Error("Received no data. Please use documented format.")
 				}
-				var qlabMessage = new QlabMessage(packet, true, node.passcode);
+				var qlabMessage = new QlabMessage(packet, true, node.passcode, node.debug);
 				
 				//In order to clear message when flow stops
 				currentMessage = qlabMessage;
 				
 				qlabMessage.on('reply', function(){
-					node.send({payload:qlabMessage.reply});
+				    msg.payload = qlabMessage.reply;
+					node.send(msg);
 				});
 				
 				qlabMessage.on('noReply', function(){
@@ -308,7 +346,7 @@ module.exports = function(RED) {
 				    node.error(error.message);
 				});
 				
-				node.qlab.createSocket().send(qlabMessage);
+				node.qlab.setDebug(debug).createSocket().send(qlabMessage);
 			}
 			catch (error) {
 				node.error(error.message, msg);
@@ -329,19 +367,24 @@ module.exports = function(RED) {
     
     
     function QlabConfig(config) {
-         RED.nodes.createNode(this,config);
+        RED.nodes.createNode(this,config);
          
         this.ipAddress 	= config.ipAddress;
         this.protocol 	= config.protocol;
-				
+        
         this.sendPort	= 53000;
         this.listenPort = 53001;	//for UDP only
         
+        this.debug = false;
 		this.numListening = 0;
-		
+        
         var node = this;
-     
-	 
+        
+        this.setDebug = function(debug) {
+            if (debug === true || debug === false) { node.debug = debug; }
+            return node;
+        };
+	    
 		this.createSocket = function() {
 			
 			//if socket does not already exist
@@ -352,18 +395,19 @@ module.exports = function(RED) {
 					//create TCP socket
 					node.socket = new net.Socket();															
 					
+                    if (node.debug) { node.log("Creating TCP socket"); }					
+					
 					node.socket.on("error", function(error) {
 						node.emit("error", error);
 					});	
 					
 					node.socket.on("data", function(data) {
-                        console.log("num listening: " + node.numListening);
                         //If nobody is listening, destroy socket.
                         if (node.numListening === 0) {
                             node.socket.destroy();
-                            console.log("listener count" + node.socket.listenerCount("data"));
                             node.listening = false;
-                            node.log("Nobody listening, socket destroyed");
+                            
+                            if (node.debug) { node.log("Socket closed because nobody listening"); }
                         }							
                     });	
 				}
@@ -373,9 +417,7 @@ module.exports = function(RED) {
 					//create UDP socket
 					node.socket = dgram.createSocket({type:'udp4', reuseAddr:true});
 					
-					node.socket.on("connect", function() {
-						
-					});					
+					if (node.debug) { node.log("Creating UDP socket"); }
 					
 					node.socket.on("error", function(error) {
 						node.emit("error", error);
@@ -385,17 +427,12 @@ module.exports = function(RED) {
                         //destroy socket if nobody is waiting for a reply		
                         if (node.numListening === 0) {
                             node.socket.close();
-                            console.log("listener count" + node.socket.listenerCount("data"));
                             node.socket = undefined;
                             node.listening = false;
                         }
                     });						
 				}
-				
-				
-			node.log("Socket created.");
 			}
-			
 			return node;
 		};
 		
@@ -403,8 +440,8 @@ module.exports = function(RED) {
 		this.send = function(qlabMessage) {			
 			
 			//numListening tracks how many messages are waiting for replies
+			if (node.numListening < 0) { node.numListening = 0; }
 			if (qlabMessage.needsReply) { node.numListening++; }			
-            
             
 			if (!node.socket) {
 			    node.createSocket();
@@ -419,6 +456,8 @@ module.exports = function(RED) {
 				//event handlers get attached to the socket.
 				qlabMessage.toOSC().toSlip().toBuffer();
 				
+				if (node.debug) { node.log("Encoded data to send: " + JSON.stringify(qlabMessage.data)); }
+				
 				addReplyListener = function() {
 				    node.socket.prependOnceListener("data", function(data){
 				        qlabMessage.emit("replyRaw", data);
@@ -430,15 +469,21 @@ module.exports = function(RED) {
                     qlabMessage.on("replyRaw", function(data) { 
                         
                         qlabMessage.reply = data;
-                        console.log("Reply received");
+                        
+                        if (node.debug) { node.log("Reply received: "+ JSON.stringify(qlabMessage.reply)); }
+                        
                         qlabMessage.fromSlip(function() { qlabMessage.fromOSCBuffer().fromJSON(); } );
                         
+                        if (node.debug) { node.log("Decoded: "+ JSON.stringify(qlabMessage.reply)); }
+                        
                         if (qlabMessage.verifyReply()) { 
+							if (node.debug) { node.log("Reply verified"); }
 							node.numListening--; 
                             qlabMessage.needsReply = false; 
                             qlabMessage.emit("reply");
                         }
                         else {
+                            if (node.debug) { node.log("Reply not verified"); }
                             addReplyListener();
                         }
                     });
@@ -452,11 +497,16 @@ module.exports = function(RED) {
 				//Send message.
 				if (!node.listening) {
 					node.listening = true;
-					node.socket.connect(node.sendPort, node.ipAddress, function(){						
-						node.log("Listening on socket. numListening = " + node.numListening);
+					node.socket.connect(node.sendPort, node.ipAddress, function(){	
+					    
+					    if (node.debug) { 
+					        node.log("Listening on socket."); 
+					        node.log("numListening = " + node.numListening);
+					    }
 						
 						//if there's a passcode, send "/connect" message first
 						if (qlabMessage.passcode) {
+						    if (node.debug) { node.log("Sending /connect message"); }
 						    node.socket.write(qlabMessage.generateConnectMessage("tcp"));
 						}
 						
@@ -466,7 +516,7 @@ module.exports = function(RED) {
 							if (node.numListening === 0) {
 								node.socket.destroy();
 								node.listening = false;
-								node.log("Socket closed because nobody listening");
+								if (node.debug) { node.log("Socket closed because nobody listening"); }
 							}	
 						});
 					});
@@ -475,20 +525,23 @@ module.exports = function(RED) {
 				else { 
                     //if there's a passcode, send "/connect" message first
 					if (qlabMessage.passcode) {
+					    if (node.debug) { node.log("Sending /connect message"); }
 					    node.socket.write(qlabMessage.generateConnectMessage("tcp"));
 					}
                     
+                    if (node.debug) { node.log("Sending message"); }
                     node.socket.write(qlabMessage.data, function() {
 						if (node.numListening === 0) {
 							node.socket.destroy();
 							node.listening = false;
-							node.log("Socket closed because nobody listening");
+							if (node.debug) { node.log("Socket closed because nobody listening"); }
 						}	
 					}); 
 				}
 				
-				node.socket.setTimeout(1000, function() {
+				setTimeout(function() {
 					if (qlabMessage.needsReply) {
+				        if (node.debug) { node.log("Reply timeout"); }					    
 						node.numListening--;
 						qlabMessage.emit("noReply");
 					}
@@ -497,9 +550,10 @@ module.exports = function(RED) {
 						if (!node.numListening) {
 							node.socket.destroy();
 							node.listening = false;
+							if (node.debug) { node.log("Socket closed because nobody listening"); }
 						}
 					}
-				});
+				}, 1000);
 			}
 			
 			
@@ -508,6 +562,8 @@ module.exports = function(RED) {
 				//from incorrect message formatting stop the flow before
 				//event handlers get attached to the socket.
 				qlabMessage.toOSC().toBuffer();
+				
+				if (node.debug) { node.log("Encoded data to send: " + JSON.stringify(qlabMessage.data)); }
 				
 			    addReplyListener = function() {
 				    node.socket.prependOnceListener("message", function(data){
@@ -520,16 +576,23 @@ module.exports = function(RED) {
                     qlabMessage.on("replyRaw", function(data) { 
                         
                         qlabMessage.reply = data;
-                        console.log("Reply received");
+                        
+                        
+                        if (node.debug) { node.log("Reply received: "+ JSON.stringify(qlabMessage.reply)); }
+                        //Decode message
                         qlabMessage.fromOSCBuffer().fromJSON();
                         
+                        if (node.debug) { node.log("Decoded: "+ JSON.stringify(qlabMessage.reply)); }
+                        
+                        
                         if (qlabMessage.verifyReply()) { 
+                            if (node.debug) { node.log("Reply verified"); }
 							node.numListening--; 
                             qlabMessage.needsReply = false; 
-                            console.log("reply verified");
                             qlabMessage.emit("reply");
                         }
                         else {
+                            if (node.debug) { node.log("Reply not verified"); }
                             addReplyListener();
                         }
                     });
@@ -542,29 +605,37 @@ module.exports = function(RED) {
 					if (!node.listening) {
 						node.socket.bind(node.listenPort, "0.0.0.0", function(){
 							node.listening = true;
-							node.log("Port bound");
+						    
+						    if (node.debug) { 
+                                node.log("Listening on socket."); 
+                                node.log("numListening = " + node.numListening);
+                            }
+                            
 						});
 					}
 				}
 			    
 				//if there's a passcode, send "/connect" message first
 				if (qlabMessage.passcode) {
+				    if (node.debug) { node.log("Sending /connect message"); }
 				    node.socket.send(qlabMessage.generateConnectMessage("udp"),0, qlabMessage.connectMessage.length, node.sendPort,node.ipAddress);
 				}			    
-			    	
-				node.socket.send(qlabMessage.data,0, qlabMessage.data.length, node.sendPort,node.ipAddress, function(error) {
-				    node.log("packet sent");
+                
+                if (node.debug) { node.log("Sending packet"); }
+                node.socket.send(qlabMessage.data,0, qlabMessage.data.length, node.sendPort,node.ipAddress, function(error) {
+				    if (node.debug) { node.log("Packet sent."); }
 					if (error) {node.socket.emit('error', new Error(error.message)); }
 					if (node.numListening === 0) {
 							node.socket.close();
 							node.socket = undefined;
 							node.listening = false;
-							node.log("Socket closed because nobody listening");
+							if (node.debug) { node.log("Socket closed because nobody listening"); }
 						}	
 					
 				});
 				setTimeout(function() {
 					if (qlabMessage.needsReply) {
+					    if (node.debug) { node.log("Reply timeout."); }
 						node.numListening--;
 						qlabMessage.emit("noReply");
 					}
@@ -574,16 +645,11 @@ module.exports = function(RED) {
 							node.socket.close();
 							node.socket = undefined;
 							node.listening = false;
+							if (node.debug) { node.log("Socket closed because nobody listening"); }
 						}
 					}
 				}, 1000);
 			}
-		};
-		
-		this.closeSocket = function() {
-		    node.listening = false;
-		    node.numListening = 0;
-		    node.socket = undefined;
 		};
     }
     RED.nodes.registerType("qlab config",QlabConfig);       
@@ -591,12 +657,13 @@ module.exports = function(RED) {
     
     
     
-	function QlabMessage(data, needsReply, passcode) {
+	function QlabMessage(data, needsReply, passcode, debug) {
 		 EventEmitter.call(this);
 		
 		this.data = data;
 		this.needsReply = needsReply;
 		this.passcode = passcode || null;
+		this.debug = debug || false;
 		
 		this.connectMessage = null;
 		
@@ -628,7 +695,11 @@ module.exports = function(RED) {
 		
 		
 		this.toOSC = function() {
+            
 			try {
+                //store message to compare with reply
+                qlabMessage.originalData = JSON.parse(JSON.stringify(qlabMessage.data));
+                
 				qlabMessage.data = osc.writePacket(qlabMessage.data);
 			}
 			catch (error) {
@@ -709,9 +780,9 @@ module.exports = function(RED) {
 			//Only return true if actually listening for reply
 			if (qlabMessage.needsReply) { 
 				
-				sentAddress = qlabMessage.data.split("/");
-				replyAddress = qlabMessage.reply.split("/");
-				
+				var sentAddress = qlabMessage.originalData.address.split("/");
+				var replyAddress = qlabMessage.reply.address.split("/");
+
 				//only return true if reply actually came from Qlab.
 				//All Qlab replies begin with "/reply"
 				if (replyAddress[1] == "reply") {
@@ -719,7 +790,7 @@ module.exports = function(RED) {
 					//If final elements in both addresses are the same return true.
 					//The whole addresses might not be the same because Qlab
 					//Auto fills the workspace/id section if it is left out.
-					if (sentAddress[sentAddres.length - 1] == replyAddress[replyAddress.length - 1])
+					if (sentAddress[sentAddress.length - 1] == replyAddress[replyAddress.length - 1])
 					{ 
 						return true; 
 					}
