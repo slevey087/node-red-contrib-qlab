@@ -1,5 +1,25 @@
+<script>
+	//Code to retrieve resources needed for the Qlab Node.
+	(function(){
+		var jsScript = document.createElement("script");
+		jsScript.type = "application/javascript";
+		jsScript.src = "/__qlab/autocomplete.js";
+		document.body.appendChild(jsScript);
+		
+		var jsScript2 = document.createElement("script");
+		jsScript2.type = "application/javascript";
+		jsScript2.src = "/__qlab/qlabCommandList.js";
+		document.body.appendChild(jsScript2);
+		
+		var cssStyle = document.createElement("link");
+		cssStyle.setAttribute("rel", "stylesheet");
+		cssStyle.setAttribute("type", "text/css");
+		cssStyle.setAttribute("href", "/__qlab/autocomplete.css");
+		document.body.appendChild(cssStyle);
+	})();
+</script>
 <script type="text/javascript">
-    RED.nodes.registerType('qlab in',{
+	RED.nodes.registerType('qlab in',{
         category: 'input',
         color: '#7a6ea3',
         defaults: {
@@ -32,7 +52,34 @@
     </div>
 </script>
 <script type="text/x-red" data-help-name="qlab in">
-    <p>Communicate with Qlab via OSC.</p>
+    <p>Communicate with Qlab via OSC. This node receives messages from Qlab Network cues.</p>
+	<p>Qlab will send (and this node will listen for) UDP packets with OSC messages. 
+		In Qlab, create a Network Patch pointed towards the IP Address of the machine running Node-Red 
+		("localhost" should work if Qlab is running on the same machine).</p> 
+	<p> Select a UDP port for use with this node. Qlab already uses ports 53000 and 53001, so probably don't 
+		choose these. Ensure that the port matches in both the Qlab Network Patch and this node's options.</p>
+	<p>If you would like to use a 4-digit passcode, be sure to set it in both the Qlab Network Patch and this node's options.</p>
+	<p>To send messages in Qlab, create a Network Cue (OSC Cue in Qlab 3), select the Network Patch you created, and enter a valid
+		OSC message. When you fire the cue, Node-Red should receive the message.</p>
+	<h3>Output</h3>
+		<dl class="message-properties">
+			<dt>payload
+				<span class="property-type">object</span>
+			</dt>
+			<dd> An object containing the message. </dd>
+			<dt>packetInfo 
+				<span class="property-type">object</span>
+			</dt>
+			<dd> An object containing UDP packt information.</dd>
+		</dl>
+	<h3>Details</h3>
+		<p><code>msg.payload</code> will contain the message elements. <code>msg.payload.address</code> will contain the OSC
+		address of the message (eg. /an/OSC/address), and <code>msg.payload.arguments</code> will contain an array of the 
+		arguments contained in the OSC message (eg <code>["true","blue","you"]</code>)</p>
+		<p><code>msg.packetInfo</code> will contain UDP packet info, including the IP address, IP version, and port of the sender, as well
+		as the size of the packet.</p>
+		<p>If there is a passcode, and the passcode from Qlab does not match, then this node will throw an error, and will
+		send a msg with the object <code>msg.payload.rejected = true</code>, omitting the OSC message.</p>
 </script>
 <script type="text/javascript">
     RED.nodes.registerType('qlab out',{
@@ -47,6 +94,24 @@
 			command: {value:""},
             name: {value:""}
         },
+		oneditprepare: function() {
+			var options = { selector:document.getElementById('node-input-command'),
+							source: function(term,suggest) {
+									var matches = [];
+									for (i=0; i<qlabCommandList.length; i++) { 
+										if (~qlabCommandList[i].toLowerCase().indexOf(term.toLowerCase())) matches.push(qlabCommandList[i]); 
+									}
+									
+									var unique = matches.filter(function(elem, index, self) {
+										return index == self.indexOf(elem);
+									});
+									
+									suggest(unique);
+								},
+							cache: false
+							};
+			var complete = new autoComplete(options)
+		},
         inputs:1,
         outputs:0,
         icon: "qlab.png",
@@ -78,7 +143,21 @@
     </div>
 </script>
 <script type="text/x-red" data-help-name="qlab out">
-    <p>Communicate with Qlab via OSC.</p>
+    <p>Communicate with Qlab via OSC. This node sends OSC commands to Qlab, without listening for a response.</p>
+	<p>This node accepts commands in several ways (listed by preference):</p>
+	<p>- If the "Command" field in the options tab has a message, then this node will send that message, and node inputs 
+	only serve as triggers.</p>
+	<p>- The <code>msg.payload</code> can be an object of the form: 
+<pre>{
+  address:"/an/OSC/address",
+  arguments: "with arguments here"
+}</pre>
+	<p>- The <code>msg.topic</code> can contain the OSC address and the <code>msg.payload</code> can contain any arguments.</p>
+	<p>- Or, the <code>msg.payload</code> can be a string with a full OSC command (eg. "/an/OSC/path with some arguments")</p>
+	<p>If "Workspace ID" is not blank, then "/workspace/{Workspace ID}" will be added in front of a command before it gets sent. 
+	(Bear in mind that this is optional, and not all commands can use it. It is probably only necessary if you have multiple 
+	Qlab sessions open on the same machine.)</p>
+	<p>"Passcode" should be the 4-digit passcode set in your Qlab "OSC Controls" section, or blank if you're not using one.</p> 
 </script>
 <script type="text/javascript">
     RED.nodes.registerType('qlab query',{
@@ -91,8 +170,28 @@
 		       validate: function(v) { return (v.match(/^\d\d\d\d$/) || v === ""); }}, 
 			workspaceId: { value:""},
 			command: {value:""},
+			onNoReply: {value:"exception", 
+					   required:true},
             name: {value:""}
         },
+		oneditprepare: function() {
+			var options = { selector:document.getElementById('node-input-command'),
+							source: function(term,suggest) {
+									var matches = [];
+									for (i=0; i<qlabCommandList.length; i++) { 
+										if (~qlabCommandList[i].toLowerCase().indexOf(term.toLowerCase())) matches.push(qlabCommandList[i]);
+									}
+									
+									var unique = matches.filter(function(elem, index, self) {
+										return index == self.indexOf(elem);
+									});
+									
+									suggest(unique);
+								},
+							cache: false
+							};
+			var complete = new autoComplete(options)
+		},		
         inputs:1,
         outputs:1,
         icon: "qlab.png",
@@ -117,14 +216,22 @@
 	<div class="form-row">
         <label for="node-input-command"><i class="fa fa-terminal"></i> Command: </label>
         <input type="text" id="node-input-command" placeholder="/an/OSC/path with some arguments">
-     </div>		 
+     </div>		
+	<div class="form-row">
+        <label for="node-input-onNoReply"><i class="fa fa-cog"></i> If no reply:</label>
+        <select id="node-input-onNoReply" style="width:160px;">            
+            <option value="exception">Throw exception.</option>
+			<option value="ignore">Ignore.</option>
+        </select>
+
+     </div>		
     <div class="form-row">
         <label for="node-input-name"><i class="icon-tag"></i> Name</label>
         <input type="text" id="node-input-name" placeholder="Name">
     </div>		
 </script>
 <script type="text/x-red" data-help-name="qlab query">
-    <p>Communicate with Qlab via OSC.</p>
+    <p>Communicate with Qlab via OSC. </p>
 </script>
 <script type="text/javascript">
      RED.nodes.registerType('qlab config',{
@@ -164,5 +271,8 @@
  </script>
  
  <script type="text/x-red" data-help-name="qlab config">
-     <p>Communicate with Qlab via OSC.</p>
+     <p>Communicate with Qlab via OSC. Link to the Qlab machine.</p>
+	<p>Enter an the IP Address of the Qlab machine, or "localhost" if Qlab is runnng on the same computer as Node-Red.</p>
+	<p>Select the TCP or UDP protocol. (TCP establishes data streams with acknowledgements. 
+	UDP sends datagrams without acknowledgement or order-checking.)</p>
  </script>
