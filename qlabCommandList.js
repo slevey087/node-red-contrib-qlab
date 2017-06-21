@@ -1,4 +1,3 @@
-
 qlabCommandList = [	"/alwaysReply {true|false}",
 	"/auditionWindow {true|false}",
 	"/toggleAuditionWindow",
