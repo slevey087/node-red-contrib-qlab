@@ -1,9 +1,10 @@
 module.exports = function(RED) {
     "use strict";
     var EventEmitter = require('events').EventEmitter;
-	var util = require('util');
+	var util  = require('util');
     var dgram = require('dgram');
     var net   = require('net');
+	var path  = require('path');
     var slip  = require('slip');
 	var osc   = require('osc');
 	
@@ -48,10 +49,24 @@ module.exports = function(RED) {
         //create udp socket
         node.socket = dgram.createSocket({type:'udp4', reuseAddr:true});
         
+		//Log on socket events
+		node.socket.on("listening", function() {
+			node.log("Listener started.");
+		});
+		
+		node.socket.on("close", function() {
+			node.log("Listener closed.");
+		});
+		
+		node.socket.on("error", function (error) {
+            node.error(error.message, []);
+        });
+		
         //tidy up when flow stops
         node.on('close', function() {
            node.socket.close(); 		   
            node.connectedTo = [];
+		   node.log("Listener closed.");
         });
         
         
@@ -85,11 +100,18 @@ module.exports = function(RED) {
                 //Variable to indicate whether message has permission
                 var connected;
                 
+				//Variable to indicate that this was a single, succesful, connect message,
+				//so no msg needs to be sent.
+				var connectOnly;
+				
                 for (var i = 0;  i < loopLength; i++) {
                     //If message is connect request, add sender info to list
                     if (packet.packets[i].address == "/connect" && packet.packets[i].args == node.passcode)
                     { 
                         node.connectTo(info.address); 
+						
+						//If this /connect message was the only message, 
+						if (loopLength == 1) { connectOnly = true; }
                     }
                     
                     //If message is connect request but wrong password, then don't allow subsequent messages
@@ -126,6 +148,7 @@ module.exports = function(RED) {
                 if (connected) {
                     node.send({payload:payload, packetInfo:info});
                 }
+				else if (connectOnly) {}
                 else {
                     node.send({payload:{rejected:true}, packetInfo:info});
                 }
@@ -135,9 +158,6 @@ module.exports = function(RED) {
             }            
         });         
         
-        node.socket.on("error", function (error) {
-            node.error(error.message, []);
-        });
         
         // Open the socket.
         try {
@@ -817,4 +837,19 @@ module.exports = function(RED) {
 		
 	}
 	util.inherits(QlabMessage, EventEmitter);
+	
+	RED.httpAdmin.get('/__qlab/autocomplete.js', function(req, res) {
+        var filename = path.join(__dirname , '/auto-complete.min.js');
+        res.sendFile(filename);
+    });
+	
+	RED.httpAdmin.get('/__qlab/qlabCommandList.js', function(req, res) {
+        var filename = path.join(__dirname , '/qlabCommandList.js');
+        res.sendFile(filename);
+    });
+	
+	RED.httpAdmin.get('/__qlab/autocomplete.css', function(req, res) {
+        var filename = path.join(__dirname , '/auto-complete.css');
+        res.sendFile(filename);
+    });	
 };
