@@ -2,7 +2,7 @@
 Node-Red nodes to communicate with Qlab, via OSC. Installs 3 nodes, 2 to control Qlab from Node-Red, and one to control Node-Red from Qlab.
 
 ## Installation
-In the directory where Node-Red is installed (usually "~/.node-red"):
+In the directory where Node-Red is installed (usually "~/.node-red"), enter in the commmand line:
 
 ```
 npm install node-red-contrib-qlab
