@@ -134,7 +134,7 @@ module.exports = function(RED) {
                         else { connected = true; }
                         
                         if (connected) {
-                            payload.push({address:packet.packets[i].address, arguments:packet.packets[i].args});
+                            payload.push({address:packet.packets[i].address, args:packet.packets[i].args});
                         }
                         else { node.error("Receiving commands without proper passcode/connection.", {}); }
                     }
@@ -281,6 +281,7 @@ module.exports = function(RED) {
 		this.passcode 	 = config.passcode;
 		this.workspaceId = config.workspaceId;
 		this.command 	 = config.command;
+		this.onNoReply   = config.onNoReply;
 		
         var node = this;
 		
@@ -353,13 +354,26 @@ module.exports = function(RED) {
 				//In order to clear message when flow stops
 				currentMessage = qlabMessage;
 				
-				qlabMessage.on('reply', function(){
+				qlabMessage.on('reply', function(debug){
+					//Pass the debug state back from the config node, so that it propogates
+					//To all the Qlab nodes.
+					node.debug = debug;
+					
 				    msg.payload = qlabMessage.reply;
 					node.send(msg);
 				});
 				
-				qlabMessage.on('noReply', function(){
-					node.warn("No reply, closing socket");
+				qlabMessage.on('noReply', function(debug){
+					//Pass the debug state back from the config node, so that it propogates
+					//To all the Qlab nodes.
+					node.debug = debug;
+					
+					if (node.onNoReply == "ignore") {
+						if (node.debug) { node.log("No verified reply, ignoring exception."); }			
+					}
+					else {
+						node.error("No reply, closing socket", msg);
+					}
 				});				
 				
 				qlabMessage.on('error', function(error){
@@ -427,7 +441,7 @@ module.exports = function(RED) {
                             node.socket.destroy();
                             node.listening = false;
                             
-                            if (node.debug) { node.log("Socket closed because nobody listening"); }
+                            if (node.debug) { node.log("Socket closed because nobody listening (1)"); }
                         }							
                     });	
 				}
@@ -500,7 +514,7 @@ module.exports = function(RED) {
 							if (node.debug) { node.log("Reply verified"); }
 							node.numListening--; 
                             qlabMessage.needsReply = false; 
-                            qlabMessage.emit("reply");
+                            qlabMessage.emit("reply", node.debug);
                         }
                         else {
                             if (node.debug) { node.log("Reply not verified"); }
@@ -536,7 +550,7 @@ module.exports = function(RED) {
 							if (node.numListening === 0) {
 								node.socket.destroy();
 								node.listening = false;
-								if (node.debug) { node.log("Socket closed because nobody listening"); }
+								if (node.debug) { node.log("Socket closed because nobody listening (2)"); }
 							}	
 						});
 					});
@@ -554,7 +568,7 @@ module.exports = function(RED) {
 						if (node.numListening === 0) {
 							node.socket.destroy();
 							node.listening = false;
-							if (node.debug) { node.log("Socket closed because nobody listening"); }
+							if (node.debug) { node.log("Socket closed because nobody listening (3)"); }
 						}	
 					}); 
 				}
@@ -563,14 +577,14 @@ module.exports = function(RED) {
 					if (qlabMessage.needsReply) {
 				        if (node.debug) { node.log("Reply timeout"); }					    
 						node.numListening--;
-						qlabMessage.emit("noReply");
+						qlabMessage.emit("noReply", node.debug);
 					}
 					
 					if (node.listening) {
 						if (!node.numListening) {
 							node.socket.destroy();
 							node.listening = false;
-							if (node.debug) { node.log("Socket closed because nobody listening"); }
+							if (node.debug) { node.log("Socket closed because nobody listening (4)"); }
 						}
 					}
 				}, 1000);
@@ -609,7 +623,7 @@ module.exports = function(RED) {
                             if (node.debug) { node.log("Reply verified"); }
 							node.numListening--; 
                             qlabMessage.needsReply = false; 
-                            qlabMessage.emit("reply");
+                            qlabMessage.emit("reply", node.debug);
                         }
                         else {
                             if (node.debug) { node.log("Reply not verified"); }
@@ -649,7 +663,7 @@ module.exports = function(RED) {
 							node.socket.close();
 							node.socket = undefined;
 							node.listening = false;
-							if (node.debug) { node.log("Socket closed because nobody listening"); }
+							if (node.debug) { node.log("Socket closed because nobody listening (5)"); }
 						}	
 					
 				});
@@ -657,7 +671,7 @@ module.exports = function(RED) {
 					if (qlabMessage.needsReply) {
 					    if (node.debug) { node.log("Reply timeout."); }
 						node.numListening--;
-						qlabMessage.emit("noReply");
+						qlabMessage.emit("noReply", node.debug);
 					}
 					
 					if (node.listening) {
@@ -665,7 +679,7 @@ module.exports = function(RED) {
 							node.socket.close();
 							node.socket = undefined;
 							node.listening = false;
-							if (node.debug) { node.log("Socket closed because nobody listening"); }
+							if (node.debug) { node.log("Socket closed because nobody listening (6)"); }
 						}
 					}
 				}, 1000);
@@ -791,8 +805,6 @@ module.exports = function(RED) {
 		};
 		
 		
-		//overwrite this function in nodes above, with code specifically
-		//meant to verify reply for given message.
 		//Should return true if qlabMessage needs reply AND the 
 		//reply received is for the message sent. Otherwise,
 		//return false (including if the message simply needs no reply)
@@ -839,7 +851,7 @@ module.exports = function(RED) {
 	util.inherits(QlabMessage, EventEmitter);
 	
 	RED.httpAdmin.get('/__qlab/autocomplete.js', function(req, res) {
-        var filename = path.join(__dirname , '/auto-complete.min.js');
+        var filename = path.join(__dirname , '/auto-complete/auto-complete.min.js');
         res.sendFile(filename);
     });
 	
@@ -849,7 +861,7 @@ module.exports = function(RED) {
     });
 	
 	RED.httpAdmin.get('/__qlab/autocomplete.css', function(req, res) {
-        var filename = path.join(__dirname , '/auto-complete.css');
+        var filename = path.join(__dirname , '/auto-complete/auto-complete.css');
         res.sendFile(filename);
     });	
 };
