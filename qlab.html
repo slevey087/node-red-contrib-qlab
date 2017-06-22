@@ -74,7 +74,7 @@
 		</dl>
 	<h3>Details</h3>
 		<p><code>msg.payload</code> will contain the message elements. <code>msg.payload.address</code> will contain the OSC
-		address of the message (eg. /an/OSC/address), and <code>msg.payload.arguments</code> will contain an array of the 
+		address of the message (eg. /an/OSC/address), and <code>msg.payload.args</code> will contain an array of the 
 		arguments contained in the OSC message (eg <code>["true","blue","you"]</code>)</p>
 		<p><code>msg.packetInfo</code> will contain UDP packet info, including the IP address, IP version, and port of the sender, as well
 		as the size of the packet.</p>
@@ -150,14 +150,15 @@
 	<p>- The <code>msg.payload</code> can be an object of the form: 
 <pre>{
   address:"/an/OSC/address",
-  arguments: "with arguments here"
+  args: "with arguments here"
 }</pre>
 	<p>- The <code>msg.topic</code> can contain the OSC address and the <code>msg.payload</code> can contain any arguments.</p>
 	<p>- Or, the <code>msg.payload</code> can be a string with a full OSC command (eg. "/an/OSC/path with some arguments")</p>
+	<p>"Passcode" should be the 4-digit passcode set in your Qlab "OSC Controls" section, or blank if you're not using one.</p> 
 	<p>If "Workspace ID" is not blank, then "/workspace/{Workspace ID}" will be added in front of a command before it gets sent. 
 	(Bear in mind that this is optional, and not all commands can use it. It is probably only necessary if you have multiple 
 	Qlab sessions open on the same machine.)</p>
-	<p>"Passcode" should be the 4-digit passcode set in your Qlab "OSC Controls" section, or blank if you're not using one.</p> 
+	
 </script>
 <script type="text/javascript">
     RED.nodes.registerType('qlab query',{
@@ -231,7 +232,28 @@
     </div>		
 </script>
 <script type="text/x-red" data-help-name="qlab query">
-    <p>Communicate with Qlab via OSC. </p>
+    <p>Communicate with Qlab via OSC. This node sends OSC commands to Qlab, and listens for a reply.</p>
+	<p>This node accepts commands in several ways (listed by preference):</p>
+	<p>- If the "Command" field in the options tab has a message, then this node will send that message, and node inputs 
+	only serve as triggers.</p>
+	<p>- The <code>msg.payload</code> can be an object of the form: 
+<pre>{
+  address:"/an/OSC/address",
+  args: "with arguments here"
+}</pre></p>
+	<p>- The <code>msg.topic</code> can contain the OSC address and the <code>msg.payload</code> can contain any arguments.</p>
+	<p>- Or, the <code>msg.payload</code> can be a string with a full OSC command (eg. "/an/OSC/path with some arguments")</p>
+	<p>"Passcode" should be the 4-digit passcode set in your Qlab "OSC Controls" section, or blank if you're not using one.</p> 		
+	<p>If "Workspace ID" is not blank, then "/workspace/{Workspace ID}" will be added in front of a command before it gets sent. 
+	(Bear in mind that this is optional, and not all commands can use it. It is probably only necessary if you have multiple 
+	Qlab sessions open on the same machine.)</p>
+	<p>The defaut behavior if no reply is received from Qlab is to throw an exception (which can be caught with the "catch" node).
+	However, you can also set this to "ignore."</p>
+	<p>Replies from Qlab will be output in <code>msg.payload</code>, as an object, of the form:
+<pre>{
+  address:"/Qlab/OSC/reply",
+  args: "with arguments here"
+}</pre>	</p>
 </script>
 <script type="text/javascript">
      RED.nodes.registerType('qlab config',{
