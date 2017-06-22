@@ -2,9 +2,10 @@
     "name"         : "node-red-contrib-qlab",
     "version"      : "0.0.1",
     "description"  : "A Node-Red node to communicate with Qlab",
+	"author"	   : "Sam Levey",
     "dependencies": {
                      "osc": "2.x",
-                     "slip": "1.0.2"
+                     "slip": "1.x"
                     },
     "keywords": [ "qlab" ],
     
