@@ -1,20 +1,23 @@
 {
-    "name"         : "node-red-contrib-qlab",
-    "version"      : "0.0.5",
-    "description"  : "A Node-Red node to communicate with Qlab",
-	"author"	   : "Sam Levey",
-    "dependencies": {
-                     "osc": "2.x",
-                     "slip": "1.x"
-                    },
-    "repository"   : { "type" : "git",
-		"url" : "https://github.com/slevey087/node-red-contrib-qlab"
-	},
-	"keywords": [ "qlab", "node-red" ],
-    
-    "node-red"     : {
-       "nodes": {
-            "qlab": "qlab.js"
-       }
-    }
+   "name": "node-red-contrib-qlab",
+   "version": "0.0.6",
+   "description": "A Node-Red node to communicate with Qlab",
+   "author": "Sam Levey",
+   "dependencies": {
+      "osc": "2.x",
+      "slip": "1.x"
+   },
+   "repository": {
+      "type": "git",
+      "url": "https://github.com/slevey087/node-red-contrib-qlab"
+   },
+   "keywords": [
+      "qlab",
+      "node-red"
+   ],
+   "node-red": {
+      "nodes": {
+         "qlab": "qlab.js"
+      }
+   }
 }
