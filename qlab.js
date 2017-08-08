@@ -224,7 +224,7 @@ module.exports = function(RED) {
 				packet = {address:msg.payload.address, args: args}
 			}			
 			else if (msg.topic) {
-				packet = {address:msg.topic, args:msg.payload}; 
+				packet = {address:msg.topic, args:msg.payload.split(' ')}; 
 				if (packet.args === "") { packet.args = undefined; }
 			}
 			else if (typeof msg.payload == "string" && msg.payload !== "") {
