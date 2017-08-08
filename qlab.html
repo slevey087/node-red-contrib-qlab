@@ -21,7 +21,7 @@
 <script type="text/javascript">
 	RED.nodes.registerType('qlab in',{
         category: 'input',
-        color: '#7a6ea3',
+        color: '#8d80bc',
         defaults: {
             port: {value:53002,
                    required:true,
@@ -75,7 +75,7 @@
 	<h3>Details</h3>
 		<p><code>msg.payload</code> will contain the message elements. <code>msg.payload.address</code> will contain the OSC
 		address of the message (eg. /an/OSC/address), and <code>msg.payload.args</code> will contain an array of the 
-		arguments contained in the OSC message (eg <code>["true","blue","you"]</code>)</p>
+		arguments contained in the OSC message (eg. <code>["true","blue","you"]</code>)</p>
 		<p><code>msg.packetInfo</code> will contain UDP packet info, including the IP address, IP version, and port of the sender, as well
 		as the size of the packet.</p>
 		<p>If there is a passcode, and the passcode from Qlab does not match, then this node will throw an error, and will
@@ -84,7 +84,7 @@
 <script type="text/javascript">
     RED.nodes.registerType('qlab out',{
         category: 'output',
-        color: '#7a6ea3',
+        color: '#8d80bc',
         defaults: {
             qlab: {value:"",
                   type:"qlab config"},
@@ -150,7 +150,11 @@
 	<p>- The <code>msg.payload</code> can be an object of the form: 
 <pre>{
   address:"/an/OSC/address",
-  args: "with arguments here"
+  args: [
+    "with", 
+    "arguments",
+    "here"
+  ]
 }</pre>
 	<p>- The <code>msg.topic</code> can contain the OSC address and the <code>msg.payload</code> can contain any arguments.</p>
 	<p>- Or, the <code>msg.payload</code> can be a string with a full OSC command (eg. "/an/OSC/path with some arguments")</p>
@@ -163,7 +167,7 @@
 <script type="text/javascript">
     RED.nodes.registerType('qlab query',{
         category: 'function',
-        color: '#7a6ea3',
+        color: '#8d80bc',
         defaults: {
             qlab: {value:"",
                   type:"qlab config"},
@@ -221,8 +225,8 @@
 	<div class="form-row">
         <label for="node-input-onNoReply"><i class="fa fa-cog"></i> If no reply:</label>
         <select id="node-input-onNoReply" style="width:160px;">            
-            <option value="exception">Throw exception.</option>
-			<option value="ignore">Ignore.</option>
+            <option value="exception">Throw exception</option>
+			<option value="ignore">Ignore</option>
         </select>
 
      </div>		
